@@ -43,3 +43,92 @@
     </script>
 </body>
 </html>
+
+
+
+
+
+
+
+-- Load Orion Library
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+
+-- Create GUI Window
+local Window = OrionLib:MakeWindow({Name = "Fly Script", HidePremium = false, SaveConfig = true, ConfigFolder = "OrionFly"})
+
+-- Variables
+local flying = false
+local speed = 50
+local player = game.Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local hrp = char:WaitForChild("HumanoidRootPart")
+local flyButton
+
+-- Detect if Mobile Device
+local UIS = game:GetService("UserInputService")
+local isMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled and not UIS.MouseEnabled
+
+-- Fly/Unfly Function
+local function toggleFly()
+    flying = not flying
+    if flying then
+        flyButton:Set("Unfly")
+        
+        -- Adjust speed if mobile device
+        local adjustedSpeed = isMobile and (speed / 2) or speed
+        
+        local bv = Instance.new("BodyVelocity", hrp)
+        bv.Velocity = Vector3.new(0, 0, 0)
+        bv.MaxForce = Vector3.new(400000, 400000, 400000)
+        
+        local bg = Instance.new("BodyGyro", hrp)
+        bg.MaxTorque = Vector3.new(400000, 400000, 400000)
+        bg.P = 100000
+        
+        game:GetService("RunService").Stepped:Connect(function()
+            if flying then
+                local moveDir = player.Character:FindFirstChildOfClass("Humanoid").MoveDirection
+                if moveDir.Magnitude > 0 then
+                    bv.Velocity = workspace.CurrentCamera.CFrame.LookVector * adjustedSpeed
+                else
+                    bv.Velocity = Vector3.new(0, 0, 0)
+                end
+                bg.CFrame = workspace.CurrentCamera.CFrame
+            else
+                bv:Destroy()
+                bg:Destroy()
+            end
+        end)
+    else
+        flyButton:Set("Fly")
+    end
+end
+
+-- Create Tabs and Elements
+local FlyTab = Window:MakeTab({Name = "Fly", Icon = "rbxassetid://4483345998", PremiumOnly = false})
+
+flyButton = FlyTab:AddButton({
+    Name = "Fly",
+    Callback = toggleFly
+})
+
+FlyTab:AddTextbox({
+    Name = "Fly Speed",
+    Default = "50",
+    TextDisappear = true,
+    Callback = function(value)
+        local num = tonumber(value)
+        if num and num >= 10 and num <= 150 then
+            speed = num
+        else
+            OrionLib:MakeNotification({
+                Name = "Invalid Speed",
+                Content = "Please enter a number between 10 and 150.",
+                Time = 5
+            })
+        end
+    end
+})
+
+-- Initialize GUI
+OrionLib:Init()
