@@ -511,44 +511,38 @@ local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent 
 
 local highlightedItem = nil
 local selectionBox = nil
-local connection = nil
+local autoMove = false
 
 -- 🔘 BUTTON: Piliin ang iha-highlight
 TabInv:AddButton({
 	Name = "Highlight a Part",
 	Callback = function()
-		if connection then connection:Disconnect() end
-
 		local mouse = player:GetMouse()
-		connection = mouse.Button1Down:Connect(function()
-			local target = mouse.Target
-			if target and target:IsDescendantOf(DynamicFurniture) then
-				local model = target:FindFirstAncestorOfClass("Model") or target
+		local target = mouse.Target
 
-				-- Remove old highlight
-				if selectionBox then
-					selectionBox:Destroy()
-				end
+		if target and target:IsDescendantOf(DynamicFurniture) then
+			local model = target:FindFirstAncestorOfClass("Model") or target
 
-				-- Create new highlight
-				selectionBox = Instance.new("SelectionBox")
-				selectionBox.Adornee = model
-				selectionBox.Color3 = Color3.fromRGB(0, 255, 0)
-				selectionBox.LineThickness = 0.05
-				selectionBox.Parent = model
-
-				highlightedItem = model
-				print("Highlighted:", model.Name)
-
-				-- Disconnect after one click
-				connection:Disconnect()
+			-- I-remove lumang selection box kung meron
+			if selectionBox then
+				selectionBox:Destroy()
 			end
-		end)
+
+			highlightedItem = model
+
+			selectionBox = Instance.new("SelectionBox")
+			selectionBox.Adornee = highlightedItem
+			selectionBox.Color3 = Color3.fromRGB(0, 255, 0)
+			selectionBox.LineThickness = 0.05
+			selectionBox.Name = "PersistentHighlight"
+			selectionBox.Parent = highlightedItem
+
+			print("Highlighted:", highlightedItem.Name)
+		end
 	end
 })
 
 -- ✅ TOGGLE: Auto-move item pag low health
-local autoMove = false
 TabInv:AddToggle({
 	Name = "Auto Move if Health <= 80%",
 	Description = "Automatically move highlighted item when health is low.",
@@ -558,33 +552,36 @@ TabInv:AddToggle({
 	end
 })
 
--- 🩺 Health Check Loop (persistent even if character dies)
+-- 🩺 Health Check Loop
 RunService.Heartbeat:Connect(function()
 	if autoMove and highlightedItem then
 		local character = player.Character
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-
 		if humanoid and humanoid.Health <= (humanoid.MaxHealth * 0.8) then
-			-- Find the latest version of the part
+			-- Re-find item by name from DynamicFurniture
 			local itemName = highlightedItem.Name
+			local found = nil
 			for _, child in ipairs(DynamicFurniture:GetChildren()) do
 				if child.Name == itemName then
-					for i = 0, 27 do
-						local args = {
-							[1] = i,
-							[2] = child
-						}
-						Remote:FireServer(unpack(args))
-					end
-					print("Item moved to chest because health is low.")
-					autoMove = false -- optional
+					found = child
 					break
 				end
+			end
+
+			if found then
+				for i = 0, 27 do
+					local args = {
+						[1] = i,
+						[2] = found
+					}
+					Remote:FireServer(unpack(args))
+				end
+				print("Item moved to chest because health is low.")
+				autoMove = false
 			end
 		end
 	end
 end)
-
 
 local TabShop = Window:MakeTab({"Shop", "shopping-cart"})
 local Paragraph = TabShop:AddParagraph({"Paragraph", "Premium Shop\nuhmm"})
