@@ -511,35 +511,39 @@ local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent 
 
 local highlightedItem = nil
 local selectionBox = nil
-local lastItemName = nil
+local connection = nil
 
 -- 🔘 BUTTON: Piliin ang iha-highlight
 TabInv:AddButton({
 	Name = "Highlight a Part",
 	Callback = function()
-		if selectionBox then
-			selectionBox:Destroy()
-			selectionBox = nil
-			highlightedItem = nil
-			lastItemName = nil
-		end
+		if connection then connection:Disconnect() end
 
 		local mouse = player:GetMouse()
-		local target = mouse.Target
-		if target and target:IsDescendantOf(DynamicFurniture) then
-			if selectionBox then selectionBox:Destroy() end
-			highlightedItem = target:FindFirstAncestorOfClass("Model") or target
-			lastItemName = highlightedItem.Name
+		connection = mouse.Button1Down:Connect(function()
+			local target = mouse.Target
+			if target and target:IsDescendantOf(DynamicFurniture) then
+				local model = target:FindFirstAncestorOfClass("Model") or target
 
-			selectionBox = Instance.new("SelectionBox")
-			selectionBox.Adornee = highlightedItem
-			selectionBox.Color3 = Color3.fromRGB(0, 255, 0)
-			selectionBox.LineThickness = 0.05
-			selectionBox.Name = "SelectionBox"
-			selectionBox.Parent = highlightedItem
+				-- Remove old highlight
+				if selectionBox then
+					selectionBox:Destroy()
+				end
 
-			print("Highlighted:", highlightedItem.Name)
-		end
+				-- Create new highlight
+				selectionBox = Instance.new("SelectionBox")
+				selectionBox.Adornee = model
+				selectionBox.Color3 = Color3.fromRGB(0, 255, 0)
+				selectionBox.LineThickness = 0.05
+				selectionBox.Parent = model
+
+				highlightedItem = model
+				print("Highlighted:", model.Name)
+
+				-- Disconnect after one click
+				connection:Disconnect()
+			end
+		end)
 	end
 })
 
@@ -554,51 +558,28 @@ TabInv:AddToggle({
 	end
 })
 
--- 🩺 Health Check Loop
+-- 🩺 Health Check Loop (persistent even if character dies)
 RunService.Heartbeat:Connect(function()
-	if lastItemName then
-		-- Hanapin ulit kung nawala man si highlightedItem
-		if not highlightedItem or not highlightedItem:IsDescendantOf(DynamicFurniture) then
-			for _, child in ipairs(DynamicFurniture:GetChildren()) do
-				if child.Name == lastItemName then
-					highlightedItem = child
-					break
-				end
-			end
-		end
-
-		-- Recreate SelectionBox kung nawala
-		if highlightedItem and not highlightedItem:FindFirstChild("SelectionBox") then
-			selectionBox = Instance.new("SelectionBox")
-			selectionBox.Adornee = highlightedItem
-			selectionBox.Color3 = Color3.fromRGB(0, 255, 0)
-			selectionBox.LineThickness = 0.05
-			selectionBox.Name = "SelectionBox"
-			selectionBox.Parent = highlightedItem
-		end
-	end
-
 	if autoMove and highlightedItem then
-		local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
 		if humanoid and humanoid.Health <= (humanoid.MaxHealth * 0.8) then
+			-- Find the latest version of the part
 			local itemName = highlightedItem.Name
-			local found = nil
 			for _, child in ipairs(DynamicFurniture:GetChildren()) do
 				if child.Name == itemName then
-					found = child
+					for i = 0, 27 do
+						local args = {
+							[1] = i,
+							[2] = child
+						}
+						Remote:FireServer(unpack(args))
+					end
+					print("Item moved to chest because health is low.")
+					autoMove = false -- optional
 					break
 				end
-			end
-			if found then
-				for i = 0, 27 do
-					local args = {
-						[1] = i,
-						[2] = found
-					}
-					Remote:FireServer(unpack(args))
-				end
-				print("Item moved to chest because health is low.")
-				autoMove = false -- optional: disable after use
 			end
 		end
 	end
