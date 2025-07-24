@@ -509,24 +509,6 @@ TabCollect:AddToggle({
 local TabInv = Window:MakeTab({"Inventory", "save"})
 local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent you to lose valuable item\n if you're about to die"})
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-
-local player = Players.LocalPlayer
-local DynamicFurniture = workspace:WaitForChild("DynamicFurniture", 9e9)
-local Remote = ReplicatedStorage:WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("moveItemToChest", 9e9)
-
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
-local Window = OrionLib:MakeWindow({Name = "Highlight & AutoMove", HidePremium = false, SaveConfig = true, ConfigFolder = "HighlightAuto"})
-
-local TabInv = Window:MakeTab({
-	Name = "Tools",
-	Icon = "rbxassetid://4483345998",
-	PremiumOnly = false
-})
-
--- 🔴 STORE ng current highlighted item
 local highlightedItem = nil
 local selectionBox = nil
 
@@ -603,7 +585,6 @@ RunService.Heartbeat:Connect(function()
 		end
 	end
 end)
-
 
 local TabShop = Window:MakeTab({"Shop", "shopping-cart"})
 local Paragraph = TabShop:AddParagraph({"Paragraph", "Premium Shop\nuhmm"})
