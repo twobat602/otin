@@ -508,106 +508,247 @@ TabCollect:AddToggle({
 
 local TabInv = Window:MakeTab({"Inventory", "save"})
 local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent you to lose valuable item\n if you're about to die"})
+local Paragraph = TabInv:AddParagraph({"Take note", "You will need a chest for this feature\n dont forget it"})
 
--- VARIABLES
+--! Assume 'TabInv' is defined and accessible elsewhere in your Roblox environment.
+--! This script should be placed in StarterPlayerScripts.
+
+-- CORE VARIABLES
 local player = game.Players.LocalPlayer
 local mouse = player:GetMouse()
-local selectedPartIndex = nil
-local selectedPartRef = nil
-local readyToSelect = false
-local moving = false
 
--- BUTTON: Enable click-to-select mode
-TabInv:AddButton({"Print", function(Value)
+-- Variables for selection state
+local selectedPartIndex = nil -- Stores the index of the selected item within DynamicFurniture
+local selectedPartRef = nil   -- Stores the actual reference to the selected Part/Model
+local readyToSelect = false   -- Flag to enable/disable click-to-select mode
+local moving = false          -- Flag for the auto-move toggle state
+
+-- --- Helper function for highlighting ---
+-- (Adjusted to handle Models if selectedPartRef becomes a Model)
+local function applyHighlight(targetObject)
+    -- Remove any existing highlight from the target object first
+    if targetObject:FindFirstChild("Highlight") then
+        targetObject:FindFirstChild("Highlight"):Destroy()
+    end
+
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = Color3.new(1, 1, 0)      -- Yellow fill
+    highlight.OutlineColor = Color3.new(1, 1, 0)   -- Yellow outline
+    highlight.FillTransparency = 0.4               -- Slightly transparent fill
+    highlight.OutlineTransparency = 0              -- Solid outline
+
+    if targetObject:IsA("Model") then
+        -- If it's a model, apply highlight to its BasePart descendants
+        for _, part in ipairs(targetObject:GetDescendants()) do
+            if part:IsA("BasePart") then
+                local partHighlight = highlight:Clone()
+                partHighlight.Parent = part
+            end
+        end
+        highlight:Destroy() -- Destroy the original cloned highlight as it's not parented
+    else -- It's a BasePart
+        highlight.Parent = targetObject
+    end
+end
+
+local function removeHighlight(targetObject)
+    if not targetObject then return end
+
+    if targetObject:IsA("Model") then
+        for _, part in ipairs(targetObject:GetDescendants()) do
+            if part:IsA("BasePart") then
+                local highlight = part:FindFirstChildOfClass("Highlight")
+                if highlight then
+                    highlight:Destroy()
+                end
+            end
+        end
+    else -- It's a BasePart
+        local highlight = targetObject:FindFirstChildOfClass("Highlight")
+        if highlight then
+            highlight:Destroy()
+        end
+    end
+end
+
+-- --- BUTTON: Enable click-to-select mode ---
+TabInv:AddButton({"Click Chest", function(Value)
     readyToSelect = true
+    print("Click Chest mode enabled. Click on a Chest in DynamicFurniture.")
+    -- Optionally, remove existing highlight when entering select mode
+    if selectedPartRef then
+        removeHighlight(selectedPartRef)
+        selectedPartRef = nil
+        selectedPartIndex = nil
+        player:SetAttribute("SelectedPartIndex", nil)
+    end
 end})
 
--- ONE-TIME CLICK SELECT (if ready)
+-- --- ONE-TIME CLICK SELECT (if ready) ---
 mouse.Button1Down:Connect(function()
-    if not readyToSelect then return end
+    if not readyToSelect then return end -- Only run if click-to-select mode is active
 
     local target = mouse.Target
-    if target and target:IsDescendantOf(workspace:WaitForChild("DynamicFurniture")) then
-        local parts = workspace.DynamicFurniture:GetChildren()
-        for i, part in ipairs(parts) do
-            if target == part or target:IsDescendantOf(part) then
-                -- Remove previous highlight
-                if selectedPartRef and selectedPartRef:FindFirstChild("Highlight") then
-                    selectedPartRef.Highlight:Destroy()
-                end
+    -- Check if the target or its ancestor is part of "DynamicFurniture"
+    -- We'll try to find the top-level item within DynamicFurniture
+    local topLevelFurnitureItem = nil
+    if target and target:IsDescendantOf(workspace:WaitForChild("DynamicFurniture", 9e9)) then
+        local current = target
+        while current and current.Parent ~= workspace:WaitForChild("DynamicFurniture", 9e9) do
+            current = current.Parent
+        end
+        topLevelFurnitureItem = current
+    end
 
-                selectedPartIndex = i - 1
+    if topLevelFurnitureItem then
+        -- Remove previous highlight
+        if selectedPartRef then
+            removeHighlight(selectedPartRef)
+        end
+
+        local parts = workspace:WaitForChild("DynamicFurniture", 9e9):GetChildren()
+        for i, part in ipairs(parts) do
+            if topLevelFurnitureItem == part then
+                selectedPartIndex = i - 1 -- Your script uses 0-based indexing for selectedPartIndex
                 selectedPartRef = part
 
-                -- Highlight the part
-                local highlight = Instance.new("Highlight")
-                highlight.FillColor = Color3.new(1, 1, 0)
-                highlight.OutlineColor = Color3.new(1, 1, 0)
-                highlight.Parent = part
+                -- Apply new highlight
+                applyHighlight(selectedPartRef)
 
                 -- Save for later
                 player:SetAttribute("SelectedPartIndex", selectedPartIndex)
+                print("Selected Chest (DynamicFurniture Index): " .. selectedPartIndex)
 
                 -- Disable select mode until button pressed again
                 readyToSelect = false
                 break
             end
         end
+    else
+        print("Clicked outside DynamicFurniture or on a non-selecteable item.")
     end
 end)
 
--- TOGGLE: Auto move when HP ≤ 80%
-local Toggle1 = TabInv:AddToggle({ 
-  Name = "Toggle",
-  Description = "This is a <font color='rgb(88, 101, 242)'>Toggle</font> Example",
-  Default = false 
+-- --- TOGGLE: Auto move when HP ≤ 80% ---
+local Toggle1 = TabInv:AddToggle({
+    Name = "Auto Move",
+    Description = "On this for your <font color='rgb(88, 101, 242)'>Safety</font> Enjoy!",
+    Default = false
 })
 
 Toggle1:Callback(function(Value)
     moving = Value
 
     if Value then
-        -- Start checking health
-        game:GetService("RunService").Heartbeat:Connect(function()
-            if not moving then return end
+        print("Auto Move Toggle ON. Monitoring health...")
+        -- Using Heartbeat for continuous checking as per your original script
+        local connection
+        connection = game:GetService("RunService").Heartbeat:Connect(function()
+            if not moving then -- If toggle is turned off while Heartbeat is running
+                if connection then connection:Disconnect() end
+                return
+            end
+
             if player.Character and player.Character:FindFirstChild("Humanoid") then
                 local hum = player.Character.Humanoid
                 if hum.Health <= hum.MaxHealth * 0.8 then
                     local index = player:GetAttribute("SelectedPartIndex")
                     if index ~= nil then
-                        local part = workspace:WaitForChild("DynamicFurniture"):GetChildren()[index + 1]
+                        local partToMoveTo = workspace:WaitForChild("DynamicFurniture", 9e9):GetChildren()[index + 1] -- Get the actual part/model
 
-                        -- Move items from 0 to 27
-                        for i = 0, 27 do
-                            local args = {
-                                [1] = i;
-                                [2] = part;
-                            }
-                            game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents"):WaitForChild("moveItemToChest"):FireServer(unpack(args))
+                        if partToMoveTo then
+                            print("Health at 80% or less! Moving items to selected Chest.")
+                            -- Move items from 0 to 27
+                            for i = 0, 27 do
+                                local args = {
+                                    [1] = i;
+                                    [2] = partToMoveTo; -- This is the actual Part/Model reference
+                                }
+                                game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("moveItemToChest", 9e9):FireServer(unpack(args))
+                            end
+                            -- Stop auto-moving after one batch move
+                            moving = false
+                            Toggle1:SetValue(false) -- Visually update the toggle
+                            print("Auto move completed and disabled.")
+                        else
+                            warn("Selected Chest not found in DynamicFurniture. Cannot auto-move.")
                         end
-
-                        moving = false -- stop after first move
+                    else
+                        warn("No Chest selected. Please use 'Click Chest' button to select one.")
                     end
                 end
             end
         end)
+    else
+        print("Auto Move Toggle OFF.")
     end
 end)
 
--- RESTORE HIGHLIGHT ON RESPAWN
+-- --- RESTORE HIGHLIGHT ON RESPAWN ---
 player.CharacterAdded:Connect(function()
-    task.wait(1)
+    task.wait(1) -- Give time for the character and workspace to load
     local index = player:GetAttribute("SelectedPartIndex")
     if index ~= nil then
-        local part = workspace:WaitForChild("DynamicFurniture"):GetChildren()[index + 1]
-        selectedPartRef = part
-        local highlight = Instance.new("Highlight")
-        highlight.FillColor = Color3.new(1, 1, 0)
-        highlight.OutlineColor = Color3.new(1, 1, 0)
-        highlight.Parent = part
+        local part = workspace:WaitForChild("DynamicFurniture", 9e9):GetChildren()[index + 1]
+        if part then
+            selectedPartRef = part
+            applyHighlight(selectedPartRef)
+            print("Restored highlight for Chest (DynamicFurniture Index): " .. index)
+        end
     end
 end)
 
+---
+--- NEW BUTTON: Move Manually
+---
+TabInv:AddButton({"Move Manually", function()
+    if selectedPartRef then
+        print("Manually moving items to selected Chest.")
+        -- Move items from 0 to 27
+        for i = 0, 27 do
+            local args = {
+                [1] = i;
+                [2] = selectedPartRef; -- Use the directly selected Part/Model
+            }
+            game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("moveItemToChest", 9e9):FireServer(unpack(args))
+        end
+        print("Manual move completed.")
+    else
+        warn("No Chest selected. Please use 'Click Chest' button to select one first.")
+    }
+})
+
+---
+--- NEW BUTTON: Open Chest (Fire ProximityPrompt)
+---
+TabInv:AddButton({"Open Chest", function()
+    if selectedPartRef then
+        -- Find a ProximityPrompt within the selectedPartRef (Chest Model or Part)
+        local proximityPrompt = selectedPartRef:FindFirstChildOfClass("ProximityPrompt")
+
+        if not proximityPrompt then
+            -- If not found directly, check its descendants (for Models)
+            for _, descendant in ipairs(selectedPartRef:GetDescendants()) do
+                if descendant:IsA("ProximityPrompt") then
+                    proximityPrompt = descendant
+                    break
+                end
+            end
+        end
+
+        if proximityPrompt then
+            -- Simulate the prompt being triggered
+            proximityPrompt:InputHoldBegin()
+            task.wait(proximityPrompt.HoldDuration) -- Simulate holding it down
+            proximityPrompt:InputHoldEnd()
+            print("Fired ProximityPrompt for selected Chest.")
+        else
+            warn("No ProximityPrompt found in the selected Chest.")
+        end
+    else
+        warn("No Chest selected. Please use 'Click Chest' button to select one first.")
+    end
+})
 
 local TabShop = Window:MakeTab({"Shop", "shopping-cart"})
 local Paragraph = TabShop:AddParagraph({"Paragraph", "Premium Shop\nuhmm"})
