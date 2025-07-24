@@ -1,4 +1,26 @@
+--! This script should be placed in StarterPlayerScripts.
+-- Pangunahing Variables (Isang Beses Lang Dineklara)
 local player = game.Players.LocalPlayer
+local mouse = player:GetMouse()
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService") -- Added for ProximityPrompt simulation
+
+-- Variables para sa Inventory (Selection/Auto-Move)
+local selectedPartIndex = nil -- Index ng napiling item sa DynamicFurniture
+local selectedPartRef = nil   -- Reference sa napiling Part/Model
+local readyToSelect = false   -- Flag para sa click-to-select mode
+local moving = false          -- Flag para sa auto-move toggle state
+
+-- Variables para sa Safety First (Emergency Teleport)
+local savedPositionCFrame = nil -- Ini-store ang CFrame ng player bago ang emergency teleport
+local emergencyTeleportPosition = CFrame.new(144, 419, 46) -- Preset na ligtas na lugar
+local safetyToggled = false -- Flag para sa Safety First toggle
+local emergencyPlatform = nil -- Temporary platform para hindi mahulog
+
+-- Load RedzLib UI Library
 local redzlib = loadstring(game:HttpGet("https://raw.githubusercontent.com/tbao143/Library-ui/refs/heads/main/Redzhubui"))()
 local Window = redzlib:MakeWindow({
     Title = "redz Hub : The Sewers",
@@ -11,47 +33,186 @@ Window:AddMinimizeButton({
     Corner = { CornerRadius = UDim.new(35, 1) },
 })
 
--- Player Tab
+---
+--- HELPER FUNCTIONS (Shared Across Tabs)
+---
+
+-- Function para sa pag-apply ng Highlight
+local function applyHighlight(targetObject)
+    -- Tanggalin muna ang existing highlight
+    local existingHighlight = targetObject:FindFirstChild("Highlight")
+    if existingHighlight then
+        existingHighlight:Destroy()
+    end
+
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = Color3.new(1, 1, 0)      -- Yellow fill
+    highlight.OutlineColor = Color3.new(1, 1, 0)   -- Yellow outline
+    highlight.FillTransparency = 0.4               -- Slightly transparent fill
+    highlight.OutlineTransparency = 0              -- Solid outline
+    highlight.Name = "Highlight" -- Fixed name to avoid conflicts
+
+    if targetObject:IsA("Model") then
+        -- Kung model, gawin ang Adornee sa PrimaryPart kung meron, or any BasePart
+        local adorneePart = targetObject.PrimaryPart or targetObject:FindFirstChildWhichIsA("BasePart")
+        if adorneePart then
+            highlight.Parent = adorneePart
+            highlight.Adornee = adorneePart
+        else
+            -- Fallback: Apply to all BaseParts in the model if no PrimaryPart
+            for _, part in ipairs(targetObject:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    local partHighlight = highlight:Clone()
+                    partHighlight.Parent = part
+                    partHighlight.Adornee = part
+                end
+            end
+            highlight:Destroy() -- Destroy the original cloned highlight
+        end
+    else -- Kung ito ay BasePart
+        highlight.Parent = targetObject
+        highlight.Adornee = targetObject
+    end
+end
+
+-- Function para mag-alis ng Highlight
+local function removeHighlight(targetObject)
+    if not targetObject then return end
+
+    if targetObject:IsA("Model") then
+        for _, part in ipairs(targetObject:GetDescendants()) do
+            if part:IsA("BasePart") then
+                local highlight = part:FindFirstChild("Highlight") -- Use specific name
+                if highlight and highlight:IsA("Highlight") then
+                    highlight:Destroy()
+                end
+            end
+        end
+    else -- Kung ito ay BasePart
+        local highlight = targetObject:FindFirstChild("Highlight") -- Use specific name
+        if highlight and highlight:IsA("Highlight") then
+            highlight:Destroy()
+        end
+    end
+end
+
+-- Helper for ProximityPrompt interaction (Standard Roblox API)
+local function fireProximityPrompt(prompt)
+    if not prompt or not prompt:IsA("ProximityPrompt") then return end
+
+    -- Simulate holding the prompt for its required duration
+    prompt:InputHoldBegin()
+    -- Check if it's a "ClickablePrompt" - this suggests an exploit-specific feature,
+    -- but for standard Roblox, InputHoldBegin/End is usually enough.
+    -- If your game has custom prompt interactions, you might need to adjust.
+    task.wait(prompt.HoldDuration) -- Wait for the hold duration
+    prompt:InputHoldEnd()
+end
+
+-- --- ONE-TIME CLICK SELECT (Inventory Tab) ---
+mouse.Button1Down:Connect(function()
+    if not readyToSelect then return end -- Tumakbo lang kung active ang click-to-select mode
+
+    local target = mouse.Target
+    local topLevelFurnitureItem = nil
+
+    if target and target:IsDescendantOf(Workspace:WaitForChild("DynamicFurniture", 9e9)) then
+        local current = target
+        while current and current.Parent ~= Workspace:WaitForChild("DynamicFurniture", 9e9) do
+            current = current.Parent
+        end
+        topLevelFurnitureItem = current
+    end
+
+    if topLevelFurnitureItem then
+        -- Tanggalin ang nakaraang highlight
+        if selectedPartRef then
+            removeHighlight(selectedPartRef)
+        end
+
+        local parts = Workspace:WaitForChild("DynamicFurniture", 9e9):GetChildren()
+        for i, part in ipairs(parts) do
+            if topLevelFurnitureItem == part then
+                selectedPartIndex = i - 1 -- Your script uses 0-based indexing for selectedPartIndex
+                selectedPartRef = part
+
+                -- Mag-apply ng bagong highlight
+                applyHighlight(selectedPartRef)
+
+                -- I-save para sa susunod
+                player:SetAttribute("SelectedPartIndex", selectedPartIndex)
+                print("Selected Chest (DynamicFurniture Index): " .. selectedPartIndex)
+
+                -- I-disable ang select mode hanggang pindutin ulit ang button
+                readyToSelect = false
+                break
+            end
+        end
+    else
+        print("Clicked outside DynamicFurniture or on a non-selectable item.")
+    end
+end)
+
+-- --- RESTORE HIGHLIGHT ON RESPAWN (Inventory Tab) ---
+player.CharacterAdded:Connect(function()
+    task.wait(1) -- Bigyan ng oras ang character at workspace na mag-load
+    local index = player:GetAttribute("SelectedPartIndex")
+    if index ~= nil then
+        local part = Workspace:WaitForChild("DynamicFurniture", 9e9):GetChildren()[index + 1]
+        if part then
+            selectedPartRef = part
+            applyHighlight(selectedPartRef)
+            print("Restored highlight for Chest (DynamicFurniture Index): " .. index)
+        end
+    end
+end)
+
+---
+--- PLAYER TAB
+---
 local TabPlayer = Window:MakeTab({"Player", "person"})
-Window:SelectTab(TabPlayer)
+Window:SelectTab(TabPlayer) -- I-select ang tab na ito bilang default
 
-local Paragraph = TabPlayer:AddParagraph({"⚠ Take Note!", "This script is still in beta, so you might encounter some bugs."})
+TabPlayer:AddParagraph({"⚠ Take Note!", "This script is still in beta, so you might encounter some bugs."})
 
--- Initial player list
+-- Player List Dropdown at Teleport Logic
+local selectedPlayerName = nil
+local playerDropdown -- Ideklara ang dropdown variable sa labas para sa scope
+
 local function getPlayerNames()
     local names = {}
-    for _, plr in ipairs(game.Players:GetPlayers()) do
-        if plr ~= player then -- Hindi isasama ang sarili sa listahan
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then -- Huwag isasama ang sarili
             table.insert(names, plr.Name)
         end
     end
     return names
 end
 
-local playerNames = getPlayerNames()
-
--- Player List Dropdown
-local selectedPlayer = nil
-local playerDropdown = TabPlayer:AddDropdown({
+playerDropdown = TabPlayer:AddDropdown({
     Name = "Players List",
     Description = "Select a player to teleport to",
-    Options = playerNames, 
+    Options = getPlayerNames(), -- Paunang listahan
     Default = "",
     Flag = "PlayerDropdown",
     Callback = function(Value)
-        selectedPlayer = Value
+        selectedPlayerName = Value
     end
 })
 
--- Function para i-update ang player list
 local function updatePlayerList()
     local updatedNames = getPlayerNames()
     playerDropdown:Refresh(updatedNames)
+    -- I-reset ang napiling player kung umalis sila
+    if selectedPlayerName and not Players:FindFirstChild(selectedPlayerName) then
+        selectedPlayerName = nil
+        playerDropdown:SetValue("") -- I-clear ang dropdown nang biswal
+    end
 end
 
 -- Auto-refresh kapag may nag-join o nag-leave
-game.Players.PlayerAdded:Connect(updatePlayerList)
-game.Players.PlayerRemoving:Connect(updatePlayerList)
+Players.PlayerAdded:Connect(updatePlayerList)
+Players.PlayerRemoving:Connect(updatePlayerList)
 
 -- Refresh Button
 TabPlayer:AddButton({
@@ -65,162 +226,185 @@ TabPlayer:AddButton({
 TabPlayer:AddButton({
     Name = "Teleport to Player",
     Callback = function()
-        if selectedPlayer then
-            local targetPlayer = game.Players:FindFirstChild(selectedPlayer)
+        if selectedPlayerName then
+            local targetPlayer = Players:FindFirstChild(selectedPlayerName)
             if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                player.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+                -- Siguraduhin na handa ang iyong character bago mag-teleport
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    player.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+                else
+                    warn("Your character is not ready for teleportation.")
+                end
+            else
+                warn("Target player or their character/root part not found.")
             end
+        else
+            warn("No player selected for teleport.")
         end
     end
 })
 
-local Paragraph = TabPlayer:AddParagraph({"How to use bring player", "Click the Bring button first and place it in the ground, and select player, create a clan\nask the player to join and ask to sit. Go to loc you want and click bring ang place the beanbag on the ground"})
+TabPlayer:AddParagraph({"How to use bring player", "Click the 'Get BeanBag' button first to teleport your beanbag to you.\nThen ask another player to join your clan/sit on it. Go to the desired location, then click 'Bring Player' again to teleport the beanbag (with the player) to you."})
 
 -- Get BeanBag Button
-TabPlayer:AddButton({"Bring player", function()
-    local beanBag = game.Workspace.DynamicFurniture:FindFirstChild("BeanBag")
-    if beanBag and beanBag:FindFirstChild("MeshPart") then
-        local meshPart = beanBag.MeshPart
-        local ownerAttribute = beanBag:GetAttribute("Owner")
-
-        if ownerAttribute == nil or ownerAttribute == player.UserId then
-            local frontPosition = player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -5)
-            meshPart.CFrame = frontPosition
+TabPlayer:AddButton({"Get BeanBag", function()
+    local dynamicFurniture = Workspace:WaitForChild("DynamicFurniture", 9e9)
+    local beanBag = nil
+    for _, obj in ipairs(dynamicFurniture:GetChildren()) do
+        if obj:IsA("Model") and obj.Name == "BeanBag" then
+            -- Hanapin ang beanbag na pag-aari ng kasalukuyang player
+            if obj:GetAttribute("Owner") == player.UserId then
+                beanBag = obj
+                break
+            end
         end
+    end
+
+    if beanBag then
+        local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if playerRoot then
+            if beanBag.PrimaryPart then
+                beanBag:SetPrimaryPartCFrame(playerRoot.CFrame * CFrame.new(0, 0, -5))
+            else
+                local meshPart = beanBag:FindFirstChildOfClass("MeshPart")
+                if meshPart then
+                    meshPart.CFrame = playerRoot.CFrame * CFrame.new(0, 0, -5)
+                else
+                    warn("BeanBag model has no PrimaryPart or MeshPart to move.")
+                end
+            end
+            print("Your BeanBag moved to your front.")
+        else
+            warn("Your character is not ready to move the BeanBag.")
+        end
+    else
+        warn("No BeanBag owned by you found in DynamicFurniture.")
     end
 end})
 
+---
+--- COLLECT TAB
+---
 local TabCollect = Window:MakeTab({"Collect", "cherry"})
 
-local Paragraph = TabCollect:AddParagraph({"Farm gear/bottle", "This is not automatically place, you need a Extractor for farming gear and bottle"})
+TabCollect:AddParagraph({"Farm gear/bottle", "This is not automatically placed, you need an Extractor for farming gear and bottle"})
 
-TabCollect:AddButton({"Collect All Scrap2", function()
-    for _, scrap in ipairs(game.Workspace.DynamicFurniture:GetChildren()) do
-        if scrap:IsA("Model") and scrap.Name == "Scrap2" then
-            local ownerAttribute = scrap:GetAttribute("Owner")
+-- Helper function para sa pag-collect ng items
+local function collectItem(itemName)
+    local dynamicFurniture = Workspace:WaitForChild("DynamicFurniture", 9e9)
+    local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not playerRoot then
+        warn("Your character is not ready to collect items. Please wait for character to load.")
+        return
+    end
 
-            -- Iteteleport lang ang Scrap2 kung wala itong may-ari
-            if ownerAttribute == nil then
-                local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                local smoothPart = scrap:FindFirstChildWhichIsA("MeshPart") -- Hahanapin ang MeshPart
-                
-                if playerRoot and smoothPart then
-                    smoothPart.CFrame = playerRoot.CFrame * CFrame.new(0, 0, -2)
+    for _, item in ipairs(dynamicFurniture:GetChildren()) do
+        if item:IsA("Model") and item.Name == itemName then
+            local ownerAttribute = item:GetAttribute("Owner")
+
+            if ownerAttribute == nil then -- Ite-teleport lang kung walang may-ari
+                -- Mas gusto ang SetPrimaryPartCFrame para sa Models, siguraduhin na set ang PrimaryPart sa Studio
+                if item.PrimaryPart then
+                    item:SetPrimaryPartCFrame(playerRoot.CFrame * CFrame.new(0, 0, -2))
+                else
+                    local smoothPart = item:FindFirstChildWhichIsA("BasePart") -- Generalize sa BasePart
+                    if smoothPart then
+                        smoothPart.CFrame = playerRoot.CFrame * CFrame.new(0, 0, -2)
+                    else
+                        warn("Item '" .. itemName .. "' has no PrimaryPart or BasePart to move.")
+                    end
                 end
             end
         end
     end
-end})
+    print("Attempted to collect all unowned " .. itemName .. "s.")
+end
 
-TabCollect:AddButton({"Collect All Pallet2", function()
-    for _, pallet in ipairs(game.Workspace.DynamicFurniture:GetChildren()) do
-        if pallet:IsA("Model") and pallet.Name == "Pallet2" then
-            local ownerAttribute = pallet:GetAttribute("Owner")
+TabCollect:AddButton({"Collect All Scrap2", function() collectItem("Scrap2") end})
+TabCollect:AddButton({"Collect All Pallet2", function() collectItem("Pallet2") end})
+TabCollect:AddButton({"Collect All Television", function() collectItem("Television") end})
+TabCollect:AddButton({"Collect All TrashCan", function() collectItem("TrashCan") end})
 
-            -- Iteteleport lang ang Pallet2 kung wala itong may-ari
-            if ownerAttribute == nil then
-                local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                if playerRoot then
-                    pallet:SetPrimaryPartCFrame(playerRoot.CFrame * CFrame.new(0, 0, -2))
-                end
-            end
-        end
-    end
-end})
+---
+--- AUTO COLLECT SECTION
+---
+TabCollect:AddSection({"Auto Collect"})
 
-TabCollect:AddButton({"Collect All Television", function()
-    for _, tv in ipairs(game.Workspace.DynamicFurniture:GetChildren()) do
-        if tv:IsA("Model") and tv.Name == "Television" then
-            local ownerAttribute = tv:GetAttribute("Owner")
-
-            -- Iteteleport lang ang Television kung wala itong may-ari
-            if ownerAttribute == nil then
-                local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                local smoothPart = tv:FindFirstChildWhichIsA("MeshPart") -- Hahanapin ang MeshPart
-                
-                if playerRoot and smoothPart then
-                    smoothPart.CFrame = playerRoot.CFrame * CFrame.new(0, 0, -2)
-                end
-            end
-        end
-    end
-end})
-
-TabCollect:AddButton({"Collect All TrashCan", function()
-    for _, trash in ipairs(game.Workspace.DynamicFurniture:GetChildren()) do
-        if trash:IsA("Model") and trash.Name == "TrashCan" then
-            local ownerAttribute = trash:GetAttribute("Owner")
-
-            -- Iteteleport lang ang TrashCan kung wala itong may-ari
-            if ownerAttribute == nil then
-                local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                local smoothPart = trash:FindFirstChildWhichIsA("MeshPart") -- Hahanapin ang MeshPart
-                
-                if playerRoot and smoothPart then
-                    smoothPart.CFrame = playerRoot.CFrame * CFrame.new(0, 0, -2)
-                end
-            end
-        end
-    end
-end})
-
-
-
-local Section = TabCollect:AddSection({"Auto Collect"})
-
-local teleporting = false
+-- Collect Snow Toggle
+local teleportingSnow = false
 
 TabCollect:AddToggle({
     Name = "Collect Snow",
     Default = false,
     Callback = function(v)
-        teleporting = v
+        teleportingSnow = v
 
-        if teleporting then
-            local player = game.Players.LocalPlayer
-            local character = player.Character
-            if not character then return end
+        if teleportingSnow then
+            task.spawn(function()
+                local char = player.Character or player.CharacterAdded:Wait()
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local rootPart = char:FindFirstChild("HumanoidRootPart")
+                local camera = Workspace.CurrentCamera
 
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            local rootPart = character:FindFirstChild("HumanoidRootPart")
-            local camera = workspace.CurrentCamera
-            if not humanoid or not rootPart or not camera then return end
+                if not hum or not rootPart or not camera then
+                    warn("Character components not found for Collect Snow. Stopping auto-collect.")
+                    teleportingSnow = false -- Turn off toggle internally
+                    return
+                end
 
-            humanoid.WalkSpeed = 0
+                local originalWalkSpeed = hum.WalkSpeed
+                hum.WalkSpeed = 0 -- Ipatigil ang paggalaw ng player
 
-            for _, snow in ipairs(workspace.DynamicFurniture:GetChildren()) do
-                if not teleporting then break end
+                -- Loop habang naka-on ang toggle
+                while teleportingSnow do
+                    local collectedAny = false
+                    local dynamicFurniture = Workspace:WaitForChild("DynamicFurniture", 9e9)
+                    for _, snow in ipairs(dynamicFurniture:GetChildren()) do
+                        if not teleportingSnow then break end -- Lumabas kung na-off ang toggle
 
-                if snow:IsA("Model") and snow.Name == "Snow" then
-                    local meshPart = snow:FindFirstChildWhichIsA("MeshPart")
-                    local prompt = snow:FindFirstChildWhichIsA("ProximityPrompt")
+                        if snow:IsA("Model") and snow.Name == "Snow" then
+                            local meshPart = snow:FindFirstChildWhichIsA("BasePart")
+                            local prompt = snow:FindFirstChildWhichIsA("ProximityPrompt")
 
-                    if meshPart and prompt then
-                        rootPart.CFrame = meshPart.CFrame
-                        task.wait(0.2)
-                        camera.CFrame = CFrame.new(camera.CFrame.Position, rootPart.Position - Vector3.new(0, 15, 0))
-                        task.wait(0.5)
+                            if meshPart and prompt then
+                                rootPart.CFrame = meshPart.CFrame -- Teleport sa snow
+                                task.wait(0.2)
+                                camera.CFrame = CFrame.new(camera.CFrame.Position, rootPart.Position - Vector3.new(0, 15, 0))
+                                task.wait(0.5)
 
-                        if prompt.ClickablePrompt then
-                            fireproximityprompt(prompt, 0)
-                            task.wait(0.3)
-                            fireproximityprompt(prompt, 1)
-                        else
-                            fireproximityprompt(prompt)
+                                fireProximityPrompt(prompt)
+                                collectedAny = true
+                                task.wait(2) -- Maghintay pagkatapos makipag-ugnayan sa isang snow
+                            end
                         end
-
-                        task.wait(2)
+                    end
+                    if not collectedAny and teleportingSnow then
+                        task.wait(5) -- Maghintay nang mas matagal kung walang nahanap na item
+                    elseif collectedAny then
+                        task.wait(1) -- Maikling paghihintay bago maghanap ng mas maraming item
                     end
                 end
-            end
 
-            humanoid.WalkSpeed = 16
+                hum.WalkSpeed = originalWalkSpeed -- Ibalik ang walkspeed pagkatapos
+                print("Collect Snow stopped.")
+            end)
+        else
+            -- Kapag na-OFF ang toggle
+            local char = player.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.WalkSpeed = 16 -- Siguraduhin na naibalik ang walkspeed
+                end
+            end
+            print("Collect Snow toggle OFF.")
         end
     end
 })
 
+-- Collect Burger Toggle
 local collectingBurger = false
-local noclipConnection
+local noclipConnectionBurger
 
 TabCollect:AddToggle({
     Name = "Collect Burger",
@@ -230,19 +414,23 @@ TabCollect:AddToggle({
 
         if collectingBurger then
             task.spawn(function()
-                local player = game.Players.LocalPlayer
-                local character = player.Character
-                if not character then return end
+                local char = player.Character or player.CharacterAdded:Wait()
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local rootPart = char:FindFirstChild("HumanoidRootPart")
+                local camera = Workspace.CurrentCamera
 
-                local humanoid = character:FindFirstChildOfClass("Humanoid")
-                local rootPart = character:FindFirstChild("HumanoidRootPart")
-                local camera = workspace.CurrentCamera
-                if not humanoid or not rootPart or not camera then return end
+                if not hum or not rootPart or not camera then
+                    warn("Character components not found for Collect Burger. Stopping auto-collect.")
+                    collectingBurger = false
+                    return
+                end
 
-                humanoid.WalkSpeed = 0
+                local originalWalkSpeed = hum.WalkSpeed
+                hum.WalkSpeed = 0
 
-                noclipConnection = game:GetService("RunService").Stepped:Connect(function()
-                    for _, part in pairs(character:GetDescendants()) do
+                -- Noclip (Client-sided: Maaaring maging sanhi ng desync/rubberbanding)
+                noclipConnectionBurger = RunService.Stepped:Connect(function()
+                    for _, part in pairs(char:GetDescendants()) do
                         if part:IsA("BasePart") and part.CanCollide then
                             part.CanCollide = false
                         end
@@ -250,11 +438,13 @@ TabCollect:AddToggle({
                 end)
 
                 while collectingBurger do
-                    for _, burger in ipairs(workspace.DynamicFurniture:GetChildren()) do
+                    local collectedAny = false
+                    local dynamicFurniture = Workspace:WaitForChild("DynamicFurniture", 9e9)
+                    for _, burger in ipairs(dynamicFurniture:GetChildren()) do
                         if not collectingBurger then break end
 
                         if burger:IsA("Model") and burger.Name == "Burger" then
-                            local meshPart = burger:FindFirstChildWhichIsA("MeshPart")
+                            local meshPart = burger:FindFirstChildWhichIsA("BasePart")
                             local prompt = burger:FindFirstChildWhichIsA("ProximityPrompt")
 
                             if meshPart and prompt then
@@ -263,34 +453,52 @@ TabCollect:AddToggle({
                                 camera.CFrame = CFrame.new(camera.CFrame.Position, rootPart.Position - Vector3.new(0, 15, 0))
                                 task.wait(0.5)
 
-                                if prompt.ClickablePrompt then
-                                    fireproximityprompt(prompt, 0)
-                                    task.wait(0.3)
-                                    fireproximityprompt(prompt, 1)
-                                else
-                                    fireproximityprompt(prompt)
-                                end
-
+                                fireProximityPrompt(prompt)
+                                collectedAny = true
                                 task.wait(2)
                             end
                         end
                     end
-                    task.wait(1)
+                    if not collectedAny and collectingBurger then
+                        task.wait(5)
+                    elseif collectedAny then
+                        task.wait(1)
+                    end
                 end
 
-                if noclipConnection then
-                    noclipConnection:Disconnect()
-                    noclipConnection = nil
+                -- Paglilinis kapag natapos ang loop o na-off ang toggle
+                if noclipConnectionBurger then
+                    noclipConnectionBurger:Disconnect()
+                    noclipConnectionBurger = nil
                 end
-
-                humanoid.WalkSpeed = 16
+                hum.WalkSpeed = originalWalkSpeed
+                print("Collect Burger stopped.")
             end)
+        else
+            -- Kapag na-OFF ang toggle
+            if noclipConnectionBurger then
+                noclipConnectionBurger:Disconnect()
+                noclipConnectionBurger = nil
+            end
+            local char = player.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.WalkSpeed = 16
+                    for _, part in pairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") and not part.CanCollide then
+                            part.CanCollide = true
+                        end
+                    end
+                end
+            end
+            print("Collect Burger toggle OFF.")
         end
     end
 })
 
+-- Collect Cheese Toggle
 local collectingCheese = false
-
 TabCollect:AddToggle({
     Name = "Collect Cheese",
     Default = false,
@@ -299,51 +507,66 @@ TabCollect:AddToggle({
 
         if collectingCheese then
             task.spawn(function()
-                local player = game.Players.LocalPlayer
-                local character = player.Character
-                if not character then return end
+                local char = player.Character or player.CharacterAdded:Wait()
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local rootPart = char:FindFirstChild("HumanoidRootPart")
+                local camera = Workspace.CurrentCamera
 
-                local humanoid = character:FindFirstChildOfClass("Humanoid")
-                local rootPart = character:FindFirstChild("HumanoidRootPart")
-                local camera = workspace.CurrentCamera
-                if not humanoid or not rootPart or not camera then return end
+                if not hum or not rootPart or not camera then
+                    warn("Character components not found for Collect Cheese. Stopping auto-collect.")
+                    collectingCheese = false
+                    return
+                end
 
-                humanoid.WalkSpeed = 0
+                local originalWalkSpeed = hum.WalkSpeed
+                hum.WalkSpeed = 0
 
                 while collectingCheese do
-                    for _, cheese in ipairs(workspace.DynamicFurniture:GetChildren()) do
+                    local collectedAny = false
+                    local dynamicFurniture = Workspace:WaitForChild("DynamicFurniture", 9e9)
+                    for _, cheese in ipairs(dynamicFurniture:GetChildren()) do
                         if not collectingCheese then break end
 
                         if cheese:IsA("Model") and cheese.Name == "Cheese" then
-                            local prompt = cheese:FindFirstChildOfClass("ProximityPrompt")
-                            if prompt then
-                                rootPart.CFrame = CFrame.new(cheese.PrimaryPart.Position + Vector3.new(0, 3, 0))
+                            local prompt = cheese:FindFirstChildWhichIsA("ProximityPrompt")
+                            local targetPart = cheese.PrimaryPart or cheese:FindFirstChildWhichIsA("BasePart")
+
+                            if targetPart and prompt then
+                                rootPart.CFrame = CFrame.new(targetPart.Position + Vector3.new(0, 3, 0))
                                 task.wait(0.1)
                                 camera.CFrame = CFrame.new(camera.CFrame.Position, rootPart.Position - Vector3.new(0, 15, 0))
 
-                                if prompt.ClickablePrompt then
-                                    fireproximityprompt(prompt, 0)
-                                    task.wait(0.3)
-                                    fireproximityprompt(prompt, 1)
-                                else
-                                    fireproximityprompt(prompt)
-                                end
-
+                                fireProximityPrompt(prompt)
+                                collectedAny = true
                                 task.wait(1.2)
                             end
                         end
                     end
-                    task.wait(0.3)
+                    if not collectedAny and collectingCheese then
+                        task.wait(5)
+                    elseif collectedAny then
+                        task.wait(0.3)
+                    end
                 end
 
-                humanoid.WalkSpeed = 16
+                hum.WalkSpeed = originalWalkSpeed
+                print("Collect Cheese stopped.")
             end)
+        else
+            local char = player.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.WalkSpeed = 16
+                end
+            end
+            print("Collect Cheese toggle OFF.")
         end
     end
 })
 
+-- Collect Mushroom Toggle
 local collectingMushroom = false
-
 TabCollect:AddToggle({
     Name = "Collect Mushroom",
     Default = false,
@@ -352,126 +575,169 @@ TabCollect:AddToggle({
 
         if collectingMushroom then
             task.spawn(function()
-                local player = game.Players.LocalPlayer
-                local character = player.Character
-                if not character then return end
+                local char = player.Character or player.CharacterAdded:Wait()
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local rootPart = char:FindFirstChild("HumanoidRootPart")
+                local camera = Workspace.CurrentCamera
 
-                local humanoid = character:FindFirstChildOfClass("Humanoid")
-                local rootPart = character:FindFirstChild("HumanoidRootPart")
-                local camera = workspace.CurrentCamera
-                if not humanoid or not rootPart or not camera then return end
+                if not hum or not rootPart or not camera then
+                    warn("Character components not found for Collect Mushroom. Stopping auto-collect.")
+                    collectingMushroom = false
+                    return
+                end
 
-                humanoid.WalkSpeed = 0
+                local originalWalkSpeed = hum.WalkSpeed
+                hum.WalkSpeed = 0
 
                 while collectingMushroom do
-                    for _, mushroom in ipairs(workspace.DynamicFurniture:GetChildren()) do
+                    local collectedAny = false
+                    local dynamicFurniture = Workspace:WaitForChild("DynamicFurniture", 9e9)
+                    for _, mushroom in ipairs(dynamicFurniture:GetChildren()) do
                         if not collectingMushroom then break end
 
                         if mushroom:IsA("Model") and mushroom.Name == "MushroomBase" then
-                            local prompt = mushroom:FindFirstChildOfClass("ProximityPrompt")
-                            if prompt then
-                                rootPart.CFrame = CFrame.new(mushroom.PrimaryPart.Position + Vector3.new(0, 3, 0))
+                            local prompt = mushroom:FindFirstChildWhichIsA("ProximityPrompt")
+                            local targetPart = mushroom.PrimaryPart or mushroom:FindFirstChildWhichIsA("BasePart")
+
+                            if targetPart and prompt then
+                                rootPart.CFrame = CFrame.new(targetPart.Position + Vector3.new(0, 3, 0))
                                 task.wait(0.3)
                                 camera.CFrame = CFrame.new(camera.CFrame.Position, rootPart.Position - Vector3.new(0, 15, 0))
 
-                                if prompt.ClickablePrompt then
-                                    fireproximityprompt(prompt, 0)
-                                    task.wait(1.2)
-                                    fireproximityprompt(prompt, 1)
-                                else
-                                    fireproximityprompt(prompt)
-                                end
-
+                                fireProximityPrompt(prompt)
+                                collectedAny = true
                                 task.wait(1.5)
                             end
                         end
                     end
-                    task.wait(0.5)
+                    if not collectedAny and collectingMushroom then
+                        task.wait(5)
+                    elseif collectedAny then
+                        task.wait(0.5)
+                    end
                 end
 
-                humanoid.WalkSpeed = 16
+                hum.WalkSpeed = originalWalkSpeed
+                print("Collect Mushroom stopped.")
             end)
+        else
+            local char = player.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.WalkSpeed = 16
+                end
+            end
+            print("Collect Mushroom toggle OFF.")
         end
     end
 })
 
-
-
-local Section = TabCollect:AddSection({"Esp Item"})
-local Paragraph = TabCollect:AddParagraph({"!", "Don't enable them all at the same time to avoid issues. This is still in beta, so expect some bugs."})
+---
+--- ESP ITEMS SECTION
+---
+local Section = TabCollect:AddSection({"ESP Item"})
+TabCollect:AddParagraph({"!", "Don't enable them all at the same time to avoid issues. This is still in beta, so expect some bugs."})
 
 local ESP_Enabled = {}
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local Beams = {}
+local ESP_Highlights = {}
 
 local Colors = {
-    Burger = Color3.fromRGB(255, 0, 0), -- Red
-    Cheese = Color3.fromRGB(255, 255, 0), -- Yellow
-    MushroomBase = Color3.fromRGB(0, 255, 0) -- Green
+    Burger = Color3.fromRGB(255, 0, 0),       -- Red
+    Cheese = Color3.fromRGB(255, 255, 0),     -- Yellow
+    MushroomBase = Color3.fromRGB(0, 255, 0)  -- Green
 }
 
-local Beams = {}
-
 function CreateESP(item, name)
-    -- Ensure PrimaryPart exists
-    if not item.PrimaryPart then
-        local basePart = item:FindFirstChildOfClass("BasePart")
-        if basePart then
-            item.PrimaryPart = basePart
-        else
-            return -- Skip if no valid part found
-        end
+    local adorneePart = item
+    if item:IsA("Model") then
+        adorneePart = item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")
     end
-    
+    if not adorneePart then return end
+
     -- Create Highlight
-    local highlight = item:FindFirstChild("Highlight")
-    if not highlight then
+    local highlightName = "ESP_" .. name
+    local highlight = adorneePart:FindFirstChild(highlightName)
+    if not highlight or not highlight:IsA("Highlight") then
         highlight = Instance.new("Highlight")
-        highlight.Parent = item
-        highlight.Adornee = item
+        highlight.Parent = adorneePart
+        highlight.Adornee = adorneePart
         highlight.FillColor = Colors[name]
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
         highlight.FillTransparency = 0.2
         highlight.OutlineTransparency = 0
-        highlight.Name = "ESP_" .. name
+        highlight.Name = highlightName
+        ESP_Highlights[adorneePart] = highlight
     end
-    
+
     -- Create Beam
     if not Beams[item] then
         local startAttachment = Instance.new("Attachment")
+        startAttachment.Name = "ESP_Start_" .. name
         local endAttachment = Instance.new("Attachment")
+        endAttachment.Name = "ESP_End_" .. name
         local beam = Instance.new("Beam")
-        
-        startAttachment.Parent = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        endAttachment.Parent = item.PrimaryPart
-        
+        beam.Name = "ESP_Beam_" .. name
+
+        local rootPart = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if not rootPart then
+            player.CharacterAdded:Once(function(char)
+                rootPart = char:WaitForChild("HumanoidRootPart")
+                if startAttachment and startAttachment.Parent == nil then -- Check if already parented by a retry
+                    startAttachment.Parent = rootPart
+                end
+            end)
+        else
+            startAttachment.Parent = rootPart
+        end
+        endAttachment.Parent = adorneePart
+
         beam.Attachment0 = startAttachment
         beam.Attachment1 = endAttachment
         beam.Color = ColorSequence.new(Colors[name])
         beam.Width0 = 0.2
         beam.Width1 = 0.2
         beam.Parent = startAttachment
-        
+
         Beams[item] = {beam, startAttachment, endAttachment}
     end
 end
 
+function RemoveESP(item)
+    local highlightName = "ESP_" .. item.Name
+    local adorneePart = item
+    if item:IsA("Model") then
+        adorneePart = item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")
+    end
+
+    if adorneePart then
+        local highlight = adorneePart:FindFirstChild(highlightName)
+        if highlight and highlight:IsA("Highlight") then
+            highlight:Destroy()
+        end
+        ESP_Highlights[adorneePart] = nil
+    end
+
+    if Beams[item] then
+        for _, obj in ipairs(Beams[item]) do
+            if obj and obj.Parent then
+                obj:Destroy()
+            end
+        end
+        Beams[item] = nil
+    end
+end
+
+local espConnection
 function UpdateESP()
-    for _, item in pairs(workspace.DynamicFurniture:GetChildren()) do
+    local dynamicFurniture = Workspace:WaitForChild("DynamicFurniture", 9e9)
+    for _, item in pairs(dynamicFurniture:GetChildren()) do
         if item:IsA("Model") and Colors[item.Name] then
             if ESP_Enabled[item.Name] then
                 CreateESP(item, item.Name)
             else
-                if item:FindFirstChild("ESP_" .. item.Name) then
-                    item["ESP_" .. item.Name]:Destroy()
-                end
-                if Beams[item] then
-                    Beams[item][1]:Destroy()
-                    Beams[item][2]:Destroy()
-                    Beams[item][3]:Destroy()
-                    Beams[item] = nil
-                end
+                RemoveESP(item)
             end
         end
     end
@@ -480,9 +746,29 @@ end
 function ToggleESP(name, enabled)
     ESP_Enabled[name] = enabled
     UpdateESP()
+
+    -- Pamahalaan ang Heartbeat connection
+    local anyEspEnabled = false
+    for _, isEnabled in pairs(ESP_Enabled) do
+        if isEnabled then
+            anyEspEnabled = true
+            break
+        end
+    end
+
+    if anyEspEnabled then
+        if not espConnection then
+            espConnection = RunService.Heartbeat:Connect(UpdateESP)
+        end
+    else
+        if espConnection then
+            espConnection:Disconnect()
+            espConnection = nil
+        end
+    end
 end
 
-TabCollect:AddToggle({ 
+TabCollect:AddToggle({
     Name = "Burger ESP",
     Default = false,
     Callback = function(v)
@@ -490,7 +776,7 @@ TabCollect:AddToggle({
     end
 })
 
-TabCollect:AddToggle({ 
+TabCollect:AddToggle({
     Name = "Cheese ESP",
     Default = false,
     Callback = function(v)
@@ -498,7 +784,7 @@ TabCollect:AddToggle({
     end
 })
 
-TabCollect:AddToggle({ 
+TabCollect:AddToggle({
     Name = "MushroomBase ESP",
     Default = false,
     Callback = function(v)
@@ -506,76 +792,17 @@ TabCollect:AddToggle({
     end
 })
 
+---
+--- INVENTORY TAB
+---
 local TabInv = Window:MakeTab({"Inventory", "save"})
-local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent you to lose valuable item\n if you're about to die"})
-local Paragraph = TabInv:AddParagraph({"Take note", "You will need a chest for this feature\n dont forget it"})
-
---! Assume 'TabInv' is defined and accessible elsewhere in your Roblox environment.
---! This script should be placed in StarterPlayerScripts.
-
--- CORE VARIABLES
-local player = game.Players.LocalPlayer
-local mouse = player:GetMouse()
-
--- Variables for selection state
-local selectedPartIndex = nil -- Stores the index of the selected item within DynamicFurniture
-local selectedPartRef = nil   -- Stores the actual reference to the selected Part/Model
-local readyToSelect = false   -- Flag to enable/disable click-to-select mode
-local moving = false          -- Flag for the auto-move toggle state
-
--- --- Helper function for highlighting ---
--- (Adjusted to handle Models if selectedPartRef becomes a Model)
-local function applyHighlight(targetObject)
-    -- Remove any existing highlight from the target object first
-    if targetObject:FindFirstChild("Highlight") then
-        targetObject:FindFirstChild("Highlight"):Destroy()
-    end
-
-    local highlight = Instance.new("Highlight")
-    highlight.FillColor = Color3.new(1, 1, 0)      -- Yellow fill
-    highlight.OutlineColor = Color3.new(1, 1, 0)   -- Yellow outline
-    highlight.FillTransparency = 0.4               -- Slightly transparent fill
-    highlight.OutlineTransparency = 0              -- Solid outline
-
-    if targetObject:IsA("Model") then
-        -- If it's a model, apply highlight to its BasePart descendants
-        for _, part in ipairs(targetObject:GetDescendants()) do
-            if part:IsA("BasePart") then
-                local partHighlight = highlight:Clone()
-                partHighlight.Parent = part
-            end
-        end
-        highlight:Destroy() -- Destroy the original cloned highlight as it's not parented
-    else -- It's a BasePart
-        highlight.Parent = targetObject
-    end
-end
-
-local function removeHighlight(targetObject)
-    if not targetObject then return end
-
-    if targetObject:IsA("Model") then
-        for _, part in ipairs(targetObject:GetDescendants()) do
-            if part:IsA("BasePart") then
-                local highlight = part:FindFirstChildOfClass("Highlight")
-                if highlight then
-                    highlight:Destroy()
-                end
-            end
-        end
-    else -- It's a BasePart
-        local highlight = targetObject:FindFirstChildOfClass("Highlight")
-        if highlight then
-            highlight:Destroy()
-        end
-    end
-end
+TabInv:AddParagraph({"For Safety", "This Feature can prevent you from losing valuable items if you're about to die."})
+TabInv:AddParagraph({"Take note", "You will need a chest for this feature. Don't forget it!"})
 
 -- --- BUTTON: Enable click-to-select mode ---
-TabInv:AddButton({"Click Chest", function(Value)
+TabInv:AddButton({"Click Chest", function()
     readyToSelect = true
     print("Click Chest mode enabled. Click on a Chest in DynamicFurniture.")
-    -- Optionally, remove existing highlight when entering select mode
     if selectedPartRef then
         removeHighlight(selectedPartRef)
         selectedPartRef = nil
@@ -584,52 +811,9 @@ TabInv:AddButton({"Click Chest", function(Value)
     end
 end})
 
--- --- ONE-TIME CLICK SELECT (if ready) ---
-mouse.Button1Down:Connect(function()
-    if not readyToSelect then return end -- Only run if click-to-select mode is active
-
-    local target = mouse.Target
-    -- Check if the target or its ancestor is part of "DynamicFurniture"
-    -- We'll try to find the top-level item within DynamicFurniture
-    local topLevelFurnitureItem = nil
-    if target and target:IsDescendantOf(workspace:WaitForChild("DynamicFurniture", 9e9)) then
-        local current = target
-        while current and current.Parent ~= workspace:WaitForChild("DynamicFurniture", 9e9) do
-            current = current.Parent
-        end
-        topLevelFurnitureItem = current
-    end
-
-    if topLevelFurnitureItem then
-        -- Remove previous highlight
-        if selectedPartRef then
-            removeHighlight(selectedPartRef)
-        end
-
-        local parts = workspace:WaitForChild("DynamicFurniture", 9e9):GetChildren()
-        for i, part in ipairs(parts) do
-            if topLevelFurnitureItem == part then
-                selectedPartIndex = i - 1 -- Your script uses 0-based indexing for selectedPartIndex
-                selectedPartRef = part
-
-                -- Apply new highlight
-                applyHighlight(selectedPartRef)
-
-                -- Save for later
-                player:SetAttribute("SelectedPartIndex", selectedPartIndex)
-                print("Selected Chest (DynamicFurniture Index): " .. selectedPartIndex)
-
-                -- Disable select mode until button pressed again
-                readyToSelect = false
-                break
-            end
-        end
-    else
-        print("Clicked outside DynamicFurniture or on a non-selecteable item.")
-    end
-end)
-
--- --- TOGGLE: Auto move when HP ≤ 80% ---
+---
+--- TOGGLE: Auto move when HP ≤ 80%
+---
 local Toggle1 = TabInv:AddToggle({
     Name = "Auto Move",
     Description = "On this for your <font color='rgb(88, 101, 242)'>Safety</font> Enjoy!",
@@ -641,34 +825,33 @@ Toggle1:Callback(function(Value)
 
     if Value then
         print("Auto Move Toggle ON. Monitoring health...")
-        -- Using Heartbeat for continuous checking as per your original script
         local connection
-        connection = game:GetService("RunService").Heartbeat:Connect(function()
-            if not moving then -- If toggle is turned off while Heartbeat is running
+        connection = RunService.Heartbeat:Connect(function()
+            if not moving then -- Kung naka-off ang toggle habang tumatakbo ang Heartbeat
                 if connection then connection:Disconnect() end
                 return
             end
 
-            if player.Character and player.Character:FindFirstChild("Humanoid") then
-                local hum = player.Character.Humanoid
-                if hum.Health <= hum.MaxHealth * 0.8 then
+            local char = player.Character
+            local hum = char and char:FindFirstChild("Humanoid")
+            if char and hum then
+                if hum.Health <= hum.MaxHealth * 0.8 then -- 80% health threshold
                     local index = player:GetAttribute("SelectedPartIndex")
                     if index ~= nil then
-                        local partToMoveTo = workspace:WaitForChild("DynamicFurniture", 9e9):GetChildren()[index + 1] -- Get the actual part/model
+                        local dynamicFurniture = Workspace:WaitForChild("DynamicFurniture", 9e9)
+                        local partToMoveTo = dynamicFurniture:GetChildren()[index + 1]
 
                         if partToMoveTo then
                             print("Health at 80% or less! Moving items to selected Chest.")
-                            -- Move items from 0 to 27
                             for i = 0, 27 do
                                 local args = {
                                     [1] = i;
-                                    [2] = partToMoveTo; -- This is the actual Part/Model reference
+                                    [2] = partToMoveTo; -- Ito ang aktwal na Part/Model reference
                                 }
-                                game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("moveItemToChest", 9e9):FireServer(unpack(args))
+                                ReplicatedStorage:WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("moveItemToChest", 9e9):FireServer(unpack(args))
                             end
-                            -- Stop auto-moving after one batch move
-                            moving = false
-                            Toggle1:SetValue(false) -- Visually update the toggle
+                            moving = false -- I-stop ang auto-moving pagkatapos ng isang batch move
+                            Toggle1:SetValue(false) -- Biswal na i-update ang toggle
                             print("Auto move completed and disabled.")
                         else
                             warn("Selected Chest not found in DynamicFurniture. Cannot auto-move.")
@@ -677,24 +860,16 @@ Toggle1:Callback(function(Value)
                         warn("No Chest selected. Please use 'Click Chest' button to select one.")
                     end
                 end
+            else
+                -- If character or humanoid is not found, disconnect to prevent errors
+                if connection then connection:Disconnect() end
+                moving = false
+                Toggle1:SetValue(false)
+                warn("Character or Humanoid not found for auto-move. Disabling auto-move.")
             end
         end)
     else
         print("Auto Move Toggle OFF.")
-    end
-end)
-
--- --- RESTORE HIGHLIGHT ON RESPAWN ---
-player.CharacterAdded:Connect(function()
-    task.wait(1) -- Give time for the character and workspace to load
-    local index = player:GetAttribute("SelectedPartIndex")
-    if index ~= nil then
-        local part = workspace:WaitForChild("DynamicFurniture", 9e9):GetChildren()[index + 1]
-        if part then
-            selectedPartRef = part
-            applyHighlight(selectedPartRef)
-            print("Restored highlight for Chest (DynamicFurniture Index): " .. index)
-        end
     end
 end)
 
@@ -704,162 +879,196 @@ end)
 TabInv:AddButton({"Move Manually", function()
     if selectedPartRef then
         print("Manually moving items to selected Chest.")
-        -- Move items from 0 to 27
         for i = 0, 27 do
             local args = {
                 [1] = i;
-                [2] = selectedPartRef; -- Use the directly selected Part/Model
+                [2] = selectedPartRef; -- Gamitin ang direktang napiling Part/Model
             }
-            game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("moveItemToChest", 9e9):FireServer(unpack(args))
+            ReplicatedStorage:WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("moveItemToChest", 9e9):FireServer(unpack(args))
         end
         print("Manual move completed.")
     else
         warn("No Chest selected. Please use 'Click Chest' button to select one first.")
-    }
-})
+    end
+end})
 
 ---
 --- NEW BUTTON: Open Chest (Fire ProximityPrompt)
 ---
 TabInv:AddButton({"Open Chest", function()
     if selectedPartRef then
-        -- Find a ProximityPrompt within the selectedPartRef (Chest Model or Part)
-        local proximityPrompt = selectedPartRef:FindFirstChildOfClass("ProximityPrompt")
+        local proximityPrompt = nil
 
-        if not proximityPrompt then
-            -- If not found directly, check its descendants (for Models)
-            for _, descendant in ipairs(selectedPartRef:GetDescendants()) do
-                if descendant:IsA("ProximityPrompt") then
-                    proximityPrompt = descendant
-                    break
+        -- Hanapin ang ProximityPrompt sa loob ng selectedPartRef o sa mga descendants nito
+        if selectedPartRef:IsA("ProximityPrompt") then
+            proximityPrompt = selectedPartRef
+        else
+            proximityPrompt = selectedPartRef:FindFirstChildOfClass("ProximityPrompt")
+            if not proximityPrompt then
+                for _, descendant in ipairs(selectedPartRef:GetDescendants()) do
+                    if descendant:IsA("ProximityPrompt") then
+                        proximityPrompt = descendant
+                        break
+                    end
                 end
             end
         end
 
         if proximityPrompt then
-            -- Simulate the prompt being triggered
-            proximityPrompt:InputHoldBegin()
-            task.wait(proximityPrompt.HoldDuration) -- Simulate holding it down
-            proximityPrompt:InputHoldEnd()
+            fireProximityPrompt(proximityPrompt)
             print("Fired ProximityPrompt for selected Chest.")
         else
-            warn("No ProximityPrompt found in the selected Chest.")
+            warn("No ProximityPrompt found in the selected Chest. Make sure the Chest model has a ProximityPrompt.")
         end
     else
         warn("No Chest selected. Please use 'Click Chest' button to select one first.")
     end
 })
 
+---
+--- SHOP TAB
+---
 local TabShop = Window:MakeTab({"Shop", "shopping-cart"})
-local Paragraph = TabShop:AddParagraph({"Paragraph", "Premium Shop\nuhmm"})
+TabShop:AddParagraph({"Paragraph", "Premium Shop\nuhmm"})
 
-TabShop:AddButton({"Buy Railgun (5364 bottle needs)", function(Value)
+TabShop:AddButton({"Buy Railgun (5364 bottle needs)", function()
     local args = {
         [1] = "Railgun";
     }
-
-    game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("buyItem", 9e9):FireServer(unpack(args))
+    ReplicatedStorage:WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("buyItem", 9e9):FireServer(unpack(args))
 end})
 
-TabShop:AddButton({"Buy AssaultRifle (16091 bottle needs)", function(Value)
+TabShop:AddButton({"Buy AssaultRifle (16091 bottle needs)", function()
     local args = {
         [1] = "AssaultRifle";
     }
-
-    game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("buyItem", 9e9):FireServer(unpack(args))
+    ReplicatedStorage:WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("buyItem", 9e9):FireServer(unpack(args))
 end})
 
-
-
+---
+--- SETTING TAB
+---
 local TabSetting = Window:MakeTab({"Setting", "apple"})
-
-local savedPosition = nil -- Variable para sa saved position
 
 -- Save Position Button
 TabSetting:AddButton({"Save Position", function()
     local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if playerRoot then
-        savedPosition = playerRoot.CFrame
-        print("Position Saved:", savedPosition)
+        savedPositionCFrame = playerRoot.CFrame
+        print("Position Saved:", savedPositionCFrame)
+    else
+        warn("Your character is not ready to save position.")
     end
-end})
+})
 
 -- Teleport to Saved Position Button
 TabSetting:AddButton({"Teleport to Saved Position", function()
     local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if playerRoot and savedPosition then
-        playerRoot.CFrame = savedPosition
+    if playerRoot and savedPositionCFrame then
+        playerRoot.CFrame = savedPositionCFrame
         print("Teleported to Saved Position")
+    else
+        warn("No saved position or your character is not ready.")
     end
-end})
+})
 
-local Paragraph = TabSetting:AddParagraph({"READ THIS!", "This is for your safety \nIf a player attempts to kill you and your health drops to 70 or below, you will automatically teleport to the preset coordinates to stay safe.\n\nThis is work only if player trying to kill you, dont try this on fire or poison"})
+TabSetting:AddParagraph({"READ THIS!", "This is for your safety \nIf a player attempts to kill you and your health drops to 70 or below, you will automatically teleport to the preset coordinates to stay safe.\n\nThis works only if a player tries to kill you, don't try this on fire or poison (it relies on combat damage)."})
 
-local player = game.Players.LocalPlayer
-local savedPosition = nil
-local teleportPosition = Vector3.new(144, 419, 46)
-local toggled = false
-local platform = nil
-
-local function setupCharacter()
+-- Function para i-set up ang pagmo-monitor ng health ng character para sa Safety First
+local emergencyTeleportActiveConnection -- Store the connection here
+local function setupSafetyCharacterMonitoring()
     local character = player.Character or player.CharacterAdded:Wait()
     local humanoid = character:WaitForChild("Humanoid")
     local rootPart = character:WaitForChild("HumanoidRootPart")
-    
-    humanoid.HealthChanged:Connect(function(health)
-        if toggled then
-            if health <= 70 then
-                if not savedPosition then
-                    savedPosition = rootPart.Position
+
+    -- I-disconnect ang nakaraang connection kung meron
+    if emergencyTeleportActiveConnection then
+        emergencyTeleportActiveConnection:Disconnect()
+    end
+
+    emergencyTeleportActiveConnection = humanoid.HealthChanged:Connect(function(health)
+        if safetyToggled then
+            if health <= 70 and health > 0 then -- Added health > 0 to prevent triggering on death
+                -- I-save lang ang posisyon KUNG tayo ay magte-teleport sa kaligtasan at hindi pa na-save
+                if not savedPositionCFrame then
+                    savedPositionCFrame = rootPart.CFrame -- I-save ang kasalukuyang CFrame bago ang emergency teleport
+                    print("Emergency: Original position saved.")
                 end
-                rootPart.CFrame = CFrame.new(teleportPosition)
-                rootPart.Velocity = Vector3.new(0, 0, 0) -- Prevent falling
-                
-                -- Create an invisible platform if not already created
-                if not platform then
-                    platform = Instance.new("Part")
-                    platform.Size = Vector3.new(10, 1, 10)
-                    platform.Position = teleportPosition - Vector3.new(0, 3, 0)
-                    platform.Anchored = true
-                    platform.CanCollide = true
-                    platform.Transparency = 1
-                    platform.Parent = game.Workspace
+
+                -- Teleport sa kaligtasan
+                rootPart.CFrame = emergencyTeleportPosition
+                rootPart.Velocity = Vector3.new(0, 0, 0) -- Pigilan ang pagbagsak
+                rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0) -- I-reset din ang assembly velocity
+
+                -- Gumawa ng invisible platform kung hindi pa nagagawa
+                if not emergencyPlatform then
+                    emergencyPlatform = Instance.new("Part")
+                    emergencyPlatform.Name = "SafetyPlatform"
+                    emergencyPlatform.Size = Vector3.new(10, 1, 10)
+                    emergencyPlatform.CFrame = emergencyTeleportPosition * CFrame.new(0, -5, 0) -- Ayusin ang posisyon na kaugnay ng teleport
+                    emergencyPlatform.Anchored = true
+                    emergencyPlatform.CanCollide = true
+                    emergencyPlatform.Transparency = 1
+                    emergencyPlatform.Parent = Workspace
+                    print("Emergency: Teleported to safety position and created platform.")
                 end
-            elseif health >= 80 and savedPosition then
-                if platform then
-                    platform:Destroy()
-                    platform = nil
+            elseif health >= 80 and savedPositionCFrame then -- Bumalik sa orihinal na lugar kung gumaling ang health at may na-save na posisyon
+                if emergencyPlatform then
+                    emergencyPlatform:Destroy()
+                    emergencyPlatform = nil
+                    print("Emergency: Destroyed safety platform.")
                 end
-                rootPart.CFrame = CFrame.new(savedPosition)
-                rootPart.Velocity = Vector3.new(0, 0, 0) -- Reset velocity
-                savedPosition = nil
+                rootPart.CFrame = savedPositionCFrame
+                rootPart.Velocity = Vector3.new(0, 0, 0)
+                rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                savedPositionCFrame = nil -- I-clear ang saved position pagkatapos makabalik
+                print("Emergency: Returned to original position.")
             end
         end
     end)
+    print("Safety First: Character health monitoring started.")
 end
 
-player.CharacterAdded:Connect(setupCharacter)
+-- I-connect ang `setupSafetyCharacterMonitoring` kapag naidagdag ang character (para sa respawn)
+player.CharacterAdded:Connect(setupSafetyCharacterMonitoring)
+-- Tawagin din ito kaagad kung may character na
 if player.Character then
-    setupCharacter()
+    setupSafetyCharacterMonitoring()
 end
 
-TabSetting:AddToggle({ 
+TabSetting:AddToggle({
     Name = "Safety First",
     Default = false,
     Callback = function(v)
-        toggled = v
-        if not v and savedPosition and player.Character then
-            local character = player.Character
-            local rootPart = character:FindFirstChild("HumanoidRootPart")
-            if rootPart then
-                if platform then
-                    platform:Destroy()
-                    platform = nil
-                end
-                rootPart.CFrame = CFrame.new(savedPosition)
-                rootPart.Velocity = Vector3.new(0, 0, 0)
-                savedPosition = nil
+        safetyToggled = v
+        if not v then -- Kung naka-OFF ang toggle
+            print("Safety First: Toggle OFF. Cleaning up.")
+            if emergencyTeleportActiveConnection then
+                emergencyTeleportActiveConnection:Disconnect()
+                emergencyTeleportActiveConnection = nil
             end
+            if emergencyPlatform then
+                emergencyPlatform:Destroy()
+                emergencyPlatform = nil
+            end
+            -- Optional: Force return to original position if currently at emergency spot when toggle is OFF
+            -- This depends on desired behavior. If you want player to stay at emergency spot if still low HP
+            -- and you turn off toggle, then remove this block.
+            -- If safetyToggled was true and you are at the emergency spot:
+            if savedPositionCFrame and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local currentHumanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                if currentHumanoid and currentHumanoid.Health <= 70 then
+                    -- If still low HP, don't force return unless health recovers
+                    warn("Safety First: Health is still low, not forcing return to original position.")
+                else
+                    player.Character.HumanoidRootPart.CFrame = savedPositionCFrame
+                    savedPositionCFrame = nil
+                    print("Safety First: Forced return to original position as toggle turned off.")
+                end
+            end
+        else
+            print("Safety First: Toggle ON. Monitoring player health.")
+            setupSafetyCharacterMonitoring() -- Siguraduhin na tumatakbo ang monitoring
         end
     end
 })
