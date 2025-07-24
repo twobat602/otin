@@ -562,7 +562,7 @@ Toggle1:Callback(function(Value)
             if not moving then return end
             if player.Character and player.Character:FindFirstChild("Humanoid") then
                 local hum = player.Character.Humanoid
-                if hum.Health <= hum.MaxHealth * 0.8 then
+                if hum.Health <= hum.MaxHealth * 0.12 then
                     local index = player:GetAttribute("SelectedPartIndex")
                     if index ~= nil then
                         local part = workspace:WaitForChild("DynamicFurniture"):GetChildren()[index + 1]
@@ -597,6 +597,69 @@ player.CharacterAdded:Connect(function()
     end
 end)
 
+TabInv:AddButton({"Manual Move Item", function()
+    local index = player:GetAttribute("SelectedPartIndex")
+    if index ~= nil then
+        local dynamicFurnitureFolder = workspace:WaitForChild("DynamicFurniture", 10)
+        if dynamicFurnitureFolder then
+            local parts = dynamicFurnitureFolder:GetChildren()
+            if index + 1 <= #parts and parts[index + 1] then
+                local part = parts[index + 1]
+
+                -- Move from 0 to 27
+                for i = 0, 27 do
+                    local args = {
+                        [1] = i;
+                        [2] = part;
+                    }
+                    game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents"):WaitForChild("moveItemToChest"):FireServer(unpack(args))
+                end
+                print("Manually moved item from index " .. index)
+            else
+                warn("Cannot manually move: Selected part at index " .. index .. " not found or invalid.")
+            end
+        else
+            warn("Cannot manually move: DynamicFurniture folder not found.")
+        end
+    else
+        warn("No item selected for manual move.")
+    end
+end})
+
+TabInv:AddButton({"Fire Proximity Prompt", function()
+    local index = player:GetAttribute("SelectedPartIndex")
+    if index ~= nil then
+        local dynamicFurnitureFolder = workspace:WaitForChild("DynamicFurniture", 10)
+        if dynamicFurnitureFolder then
+            local parts = dynamicFurnitureFolder:GetChildren()
+            if index + 1 <= #parts and parts[index + 1] then
+                local part = parts[index + 1]
+                
+                local proximityPrompt = part:FindFirstChildOfClass("ProximityPrompt")
+                
+                if proximityPrompt then
+                    -- Trigger the proximity prompt
+                    -- Note: Directly triggering a ProximityPrompt from a LocalScript
+                    -- might not always work as expected depending on how it's handled on the server.
+                    -- You might need a RemoteEvent to tell the server to activate it.
+                    -- For client-side simulation, you can try:
+                    proximityPrompt:InputHoldBegin() -- Simulate holding the input
+                    task.wait(0.1) -- Short delay
+                    proximityPrompt:InputHoldEnd() -- Simulate releasing the input
+                    print("Attempted to fire ProximityPrompt on selected item.")
+                else
+                    warn("No ProximityPrompt found on the selected item.")
+                end
+            else
+                warn("Cannot fire ProximityPrompt: Selected part at index " .. index .. " not found or invalid.")
+            end
+        else
+            warn("Cannot fire ProximityPrompt: DynamicFurniture folder not found.")
+        end
+    else
+        warn("No item selected to fire ProximityPrompt.")
+    end
+end})
 
 local TabShop = Window:MakeTab({"Shop", "shopping-cart"})
 local Paragraph = TabShop:AddParagraph({"Paragraph", "Premium Shop\nuhmm"})
