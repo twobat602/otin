@@ -510,93 +510,178 @@ local TabInv = Window:MakeTab({"Inventory", "save"})
 local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent you to lose valuable item\n if you're about to die"})
 
 -- Variables
+
 local player = game.Players.LocalPlayer
+
 local mouse = player:GetMouse()
+
 local selectedPartIndex = nil
+
 local selectedPartRef = nil
+
 local moving = false
 
+
+
 -- Button: Click to select/highlight part
+
 TabInv:AddButton({"Print", function(Value)
-    mouse.Button1Down:Connect(function()
-        local target = mouse.Target
-        if target and target:IsDescendantOf(workspace:WaitForChild("DynamicFurniture")) then
-            local parts = workspace.DynamicFurniture:GetChildren()
-            for i, part in ipairs(parts) do
-                if target == part or target:IsDescendantOf(part) then
-                    -- Unhighlight old
-                    if selectedPartRef and selectedPartRef:FindFirstChild("Highlight") then
-                        selectedPartRef.Highlight:Destroy()
-                    end
 
-                    selectedPartIndex = i - 1
-                    selectedPartRef = part
+    mouse.Button1Down:Connect(function()
 
-                    -- Highlight
-                    local highlight = Instance.new("Highlight", part)
-                    highlight.FillColor = Color3.new(1, 1, 0)
-                    highlight.OutlineColor = Color3.new(1, 1, 0)
+        local target = mouse.Target
 
-                    -- Store index for later
-                    player:SetAttribute("SelectedPartIndex", selectedPartIndex)
-                    break
-                end
-            end
-        end
-    end)
+        if target and target:IsDescendantOf(workspace:WaitForChild("DynamicFurniture")) then
+
+            local parts = workspace.DynamicFurniture:GetChildren()
+
+            for i, part in ipairs(parts) do
+
+                if target == part or target:IsDescendantOf(part) then
+
+                    -- Unhighlight old
+
+                    if selectedPartRef and selectedPartRef:FindFirstChild("Highlight") then
+
+                        selectedPartRef.Highlight:Destroy()
+
+                    end
+
+
+
+                    selectedPartIndex = i - 1
+
+                    selectedPartRef = part
+
+
+
+                    -- Highlight
+
+                    local highlight = Instance.new("Highlight", part)
+
+                    highlight.FillColor = Color3.new(1, 1, 0)
+
+                    highlight.OutlineColor = Color3.new(1, 1, 0)
+
+
+
+                    -- Store index for later
+
+                    player:SetAttribute("SelectedPartIndex", selectedPartIndex)
+
+                    break
+
+                end
+
+            end
+
+        end
+
+    end)
+
 end})
 
+
+
 -- Toggle: Auto move when HP <= 80%
-local Toggle1 = TabInv:AddToggle({ 
-  Name = "Toggle",
-  Description = "This is a <font color='rgb(88, 101, 242)'>Toggle</font> Example",
-  Default = false 
+
+local Toggle1 = TabInv:AddToggle({ 
+
+  Name = "Toggle",
+
+  Description = "This is a <font color='rgb(88, 101, 242)'>Toggle</font> Example",
+
+  Default = false 
+
 })
 
+
+
 Toggle1:Callback(function(Value)
-    moving = Value
 
-    if Value then
-        -- Start loop
-        game:GetService("RunService").Heartbeat:Connect(function()
-            if not moving then return end
-            if player.Character and player.Character:FindFirstChild("Humanoid") then
-                local hum = player.Character.Humanoid
-                if hum.Health <= hum.MaxHealth * 0.8 then
-                    local index = player:GetAttribute("SelectedPartIndex")
-                    if index ~= nil then
-                        local part = workspace:WaitForChild("DynamicFurniture"):GetChildren()[index + 1]
+    moving = Value
 
-                        -- Move from 0 to 27
-                        for i = 0, 27 do
-                            local args = {
-                                [1] = i;
-                                [2] = part;
-                            }
-                            game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents"):WaitForChild("moveItemToChest"):FireServer(unpack(args))
-                        end
 
-                        moving = false -- stop after one run
-                    end
-                end
-            end
-        end)
-    end
+
+    if Value then
+
+        -- Start loop
+
+        game:GetService("RunService").Heartbeat:Connect(function()
+
+            if not moving then return end
+
+            if player.Character and player.Character:FindFirstChild("Humanoid") then
+
+                local hum = player.Character.Humanoid
+
+                if hum.Health <= hum.MaxHealth * 0.8 then
+
+                    local index = player:GetAttribute("SelectedPartIndex")
+
+                    if index ~= nil then
+
+                        local part = workspace:WaitForChild("DynamicFurniture"):GetChildren()[index + 1]
+
+
+
+                        -- Move from 0 to 27
+
+                        for i = 0, 27 do
+
+                            local args = {
+
+                                [1] = i;
+
+                                [2] = part;
+
+                            }
+
+                            game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents"):WaitForChild("moveItemToChest"):FireServer(unpack(args))
+
+                        end
+
+
+
+                        moving = false -- stop after one run
+
+                    end
+
+                end
+
+            end
+
+        end)
+
+    end
+
 end)
+
+
 
 -- Restore on respawn
-player.CharacterAdded:Connect(function()
-    task.wait(1)
-    local index = player:GetAttribute("SelectedPartIndex")
-    if index ~= nil then
-        local part = workspace:WaitForChild("DynamicFurniture"):GetChildren()[index + 1]
-        selectedPartRef = part
-        local highlight = Instance.new("Highlight", part)
-        highlight.FillColor = Color3.new(1, 1, 0)
-        highlight.OutlineColor = Color3.new(1, 1, 0)
-    end
-end)
 
+player.CharacterAdded:Connect(function()
+
+    task.wait(1)
+
+    local index = player:GetAttribute("SelectedPartIndex")
+
+    if index ~= nil then
+
+        local part = workspace:WaitForChild("DynamicFurniture"):GetChildren()[index + 1]
+
+        selectedPartRef = part
+
+        local highlight = Instance.new("Highlight", part)
+
+        highlight.FillColor = Color3.new(1, 1, 0)
+
+        highlight.OutlineColor = Color3.new(1, 1, 0)
+
+    end
+
+end)
 
 local TabShop = Window:MakeTab({"Shop", "shopping-cart"})
 local Paragraph = TabShop:AddParagraph({"Paragraph", "Premium Shop\nuhmm"})
