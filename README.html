@@ -522,13 +522,13 @@ local selectedModel
 local selectedIndex
 local currentHighlight
 local highlightMode = false
-local autoFireProx = false
+local autoMoveEnabled = false
+local moved = false -- para hindi paulit-ulit mag move
 
--- BUTTON: Toggle highlight mode
+-- BUTTON: Click to start highlight selection
 TabInv:AddButton({
 	Name = "Select Part to Highlight",
 	Callback = function()
-		-- Enable clicking on part for highlight
 		if currentHighlight then
 			currentHighlight:Destroy()
 			currentHighlight = nil
@@ -541,18 +541,18 @@ TabInv:AddButton({
 	end
 })
 
--- TOGGLE: Auto-fire proximity if health <= 80%
-local Toggle1 = TabInv:AddToggle({
-	Name = "Auto Fire Proximity if Health <= 80%",
-	Description = "Fires ProximityPrompt of highlighted model if health is low",
-	Default = false
+-- TOGGLE: Auto move item to chest when health is low
+TabInv:AddToggle({
+	Name = "Auto Move if Health <= 80%",
+	Description = "Automatically moves the highlighted item to chest when health drops",
+	Default = false,
+	Callback = function(Value)
+		autoMoveEnabled = Value
+		moved = false -- reset on toggle
+	end
 })
 
-Toggle1:Callback(function(Value)
-	autoFireProx = Value
-end)
-
--- CLICKING to highlight model
+-- CLICK to highlight a part
 mouse.Button1Down:Connect(function()
 	if not highlightMode then return end
 
@@ -574,7 +574,7 @@ mouse.Button1Down:Connect(function()
 			selectedModel = model
 			highlightMode = false
 
-			-- Save index from GetChildren
+			-- Get dynamic index
 			for i, obj in ipairs(DynamicFurniture:GetChildren()) do
 				if obj == model then
 					selectedIndex = i
@@ -583,41 +583,29 @@ mouse.Button1Down:Connect(function()
 			end
 
 			print("Highlighted model at index:", selectedIndex)
+			moved = false -- allow move again if newly highlighted
 		end
 	end
 end)
 
--- AUTO FIRE PROXIMITY WHEN HEALTH LOW
+-- MONITOR HEALTH, auto-move item if enabled
 RunService.RenderStepped:Connect(function()
-	if not autoFireProx or not selectedModel then return end
+	if not autoMoveEnabled or not selectedIndex then return end
 
 	local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-	if hum and hum.Health <= hum.MaxHealth * 0.8 then
-		local prompt = selectedModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-		if prompt then
-			fireproximityprompt(prompt)
+	if hum and hum.Health <= hum.MaxHealth * 0.8 and not moved then
+		local item = DynamicFurniture:GetChildren()[selectedIndex]
+		for i = 0, 27 do
+			local args = {
+				[1] = i,
+				[2] = item
+			}
+			Remote:FireServer(unpack(args))
 		end
+		print("Item auto-moved to chest due to low health.")
+		moved = true
 	end
 end)
-
--- BUTTON: Move highlighted item to chest
-TabInv:AddButton({
-	Name = "Move Highlighted Item to Chest",
-	Callback = function()
-		if selectedIndex then
-			local item = DynamicFurniture:GetChildren()[selectedIndex]
-			for i = 0, 27 do
-				local args = {
-					[1] = i,
-					[2] = item
-				}
-				Remote:FireServer(unpack(args))
-			end
-		else
-			warn("No selected model to move.")
-		end
-	end
-})
 
 
 local TabShop = Window:MakeTab({"Shop", "shopping-cart"})
