@@ -506,8 +506,8 @@ TabCollect:AddToggle({
     end
 })
 
-local TabInv = Window:MakeTab({"Inventory", "save"})
-local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent you to lose valuable item\n if you're about to die"})
+local TabInventory = Window:MakeTab({"Inventory", "save"})
+local Paragraph = TabInventory:AddParagraph({"For Safety", "This Featured can prevent you to lose valuable item\n if you're about to die"})
 
 -- VARIABLES
 
@@ -527,7 +527,7 @@ local moving = false
 
 -- BUTTON: Enable click-to-select mode
 
-TabInv:AddButton({"Press Chest", function(Value)
+TabInventory:AddButton({"Press Chest", function(Value)
 
     readyToSelect = true
 
@@ -605,7 +605,7 @@ end)
 
 -- TOGGLE: Auto move when HP ≤ 80%
 
-local Toggle1 = TabInv:AddToggle({ 
+local Toggle1 = TabInventory:AddToggle({ 
 
   Name = "Auto Move",
 
