@@ -518,7 +518,7 @@ TabShop:AddButton({"Buy Railgun (5364 bottle needs)", function(Value)
     game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("buyItem", 9e9):FireServer(unpack(args))
 end})
 
-Tab1:AddButton({"Buy AssaultRifle (16091 bottle needs)", function(Value)
+TabShop:AddButton({"Buy AssaultRifle (16091 bottle needs)", function(Value)
     local args = {
         [1] = "AssaultRifle";
     }
@@ -528,7 +528,7 @@ end})
 
 
 
-local TabSetting = Window:MakeTab({"Setting", "settings"})
+local TabSetting = Window:MakeTab({"Setting", "apple"})
 
 local savedPosition = nil -- Variable para sa saved position
 
