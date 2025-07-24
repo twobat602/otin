@@ -509,82 +509,61 @@ TabCollect:AddToggle({
 local TabInv = Window:MakeTab({"Inventory", "save"})
 local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent you to lose valuable item\n if you're about to die"})
 
-local highlightedItem = nil
-local selectionBox = nil
-
--- 🔘 BUTTON: Piliin ang iha-highlight
+-- Highlight Selection Button
 TabInv:AddButton({
-	Name = "Highlight a Part",
+	Name = "Select Highlight",
 	Callback = function()
-		if selectionBox then
-			selectionBox:Destroy()
-			selectionBox = nil
-			highlightedItem = nil
-		end
-
-		local connection
-		connection = workspace.DescendantAdded:Connect(function() end) -- dummy to keep connection alive
-
-		local function onClick()
-			local mouse = player:GetMouse()
+		local mouse = player:GetMouse()
+		mouse.Button1Down:Connect(function()
 			local target = mouse.Target
 			if target and target:IsDescendantOf(DynamicFurniture) then
-				if selectionBox then selectionBox:Destroy() end
-				highlightedItem = target:FindFirstAncestorOfClass("Model") or target
-
-				selectionBox = Instance.new("SelectionBox")
-				selectionBox.Adornee = highlightedItem
-				selectionBox.Color3 = Color3.fromRGB(0, 255, 0)
-				selectionBox.LineThickness = 0.05
-				selectionBox.Parent = highlightedItem
-
-				print("Highlighted:", highlightedItem.Name)
+				SelectedItem = target:FindFirstAncestorOfClass("Model")
+				print("Selected:", SelectedItem.Name)
 			end
-		end
-
-		onClick()
+		end)
 	end
 })
 
--- ✅ TOGGLE: Auto-move item pag low health
-local autoMove = false
+-- Toggle Auto Move when 80% health
 TabInv:AddToggle({
-	Name = "Auto Move if Health <= 80%",
-	Description = "Automatically move highlighted item when health is low.",
+	Name = "Auto Move (80% HP)",
 	Default = false,
-	Callback = function(Value)
-		autoMove = Value
-	end
-})
+	Callback = function(toggle)
+		if toggle then
+			moved = false
+			local function setupHumanoid(h)
+				h.HealthChanged:Connect(function(health)
+					if not SelectedItem or moved then return end
 
--- 🩺 Health Check Loop
-RunService.Heartbeat:Connect(function()
-	if autoMove and highlightedItem then
-		local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-		if humanoid and humanoid.Health <= (humanoid.MaxHealth * 0.8) then
-			-- Get latest version of the item from DynamicFurniture
-			local itemName = highlightedItem.Name
-			local found = nil
-			for _, child in ipairs(DynamicFurniture:GetChildren()) do
-				if child.Name == itemName then
-					found = child
-					break
-				end
+					if health <= h.MaxHealth * 0.8 then
+						moved = true -- iwas doble
+						for i = 0, 27 do
+							local args = {
+								[1] = i,
+								[2] = SelectedItem
+							}
+							MoveRemote:FireServer(unpack(args))
+						end
+						print("Item moved due to low HP.")
+					end
+				end)
 			end
-			if found then
-				for i = 0, 27 do
-					local args = {
-						[1] = i,
-						[2] = found
-					}
-					Remote:FireServer(unpack(args))
-				end
-				print("Item moved to chest because health is low.")
-				autoMove = false -- optional: turn off after one move
+
+			-- Initial humanoid setup
+			if humanoid then
+				setupHumanoid(humanoid)
 			end
+
+			-- Respawn check (new character = reset moved state)
+			player.CharacterAdded:Connect(function(newChar)
+				moved = false
+				character = newChar
+				humanoid = character:WaitForChild("Humanoid")
+				setupHumanoid(humanoid)
+			end)
 		end
 	end
-end)
+})
 
 local TabShop = Window:MakeTab({"Shop", "shopping-cart"})
 local Paragraph = TabShop:AddParagraph({"Paragraph", "Premium Shop\nuhmm"})
