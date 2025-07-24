@@ -512,98 +512,95 @@ local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local DynamicFurniture = workspace:WaitForChild("DynamicFurniture")
-local Remote = ReplicatedStorage:WaitForChild("shared/network@GlobalEvents"):WaitForChild("moveItemToChest")
 
 local player = Players.LocalPlayer
-local mouse = player:GetMouse()
+local DynamicFurniture = workspace:WaitForChild("DynamicFurniture", 9e9)
+local Remote = ReplicatedStorage:WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("moveItemToChest", 9e9)
 
-local selectedModel
-local selectedIndex
-local currentHighlight
-local highlightMode = false
-local autoMoveEnabled = false
-local moved = false -- para hindi paulit-ulit mag move
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+local Window = OrionLib:MakeWindow({Name = "Highlight & AutoMove", HidePremium = false, SaveConfig = true, ConfigFolder = "HighlightAuto"})
 
--- BUTTON: Click to start highlight selection
+local TabInv = Window:MakeTab({
+	Name = "Tools",
+	Icon = "rbxassetid://4483345998",
+	PremiumOnly = false
+})
+
+-- 🔴 STORE ng current highlighted item
+local highlightedItem = nil
+local selectionBox = nil
+
+-- 🔘 BUTTON: Piliin ang iha-highlight
 TabInv:AddButton({
-	Name = "Select Part to Highlight",
+	Name = "Highlight a Part",
 	Callback = function()
-		if currentHighlight then
-			currentHighlight:Destroy()
-			currentHighlight = nil
-			selectedModel = nil
-			selectedIndex = nil
+		if selectionBox then
+			selectionBox:Destroy()
+			selectionBox = nil
+			highlightedItem = nil
 		end
 
-		highlightMode = true
-		print("Click a part in DynamicFurniture to highlight it.")
+		local connection
+		connection = workspace.DescendantAdded:Connect(function() end) -- dummy to keep connection alive
+
+		local function onClick()
+			local mouse = player:GetMouse()
+			local target = mouse.Target
+			if target and target:IsDescendantOf(DynamicFurniture) then
+				if selectionBox then selectionBox:Destroy() end
+				highlightedItem = target:FindFirstAncestorOfClass("Model") or target
+
+				selectionBox = Instance.new("SelectionBox")
+				selectionBox.Adornee = highlightedItem
+				selectionBox.Color3 = Color3.fromRGB(0, 255, 0)
+				selectionBox.LineThickness = 0.05
+				selectionBox.Parent = highlightedItem
+
+				print("Highlighted:", highlightedItem.Name)
+			end
+		end
+
+		onClick()
 	end
 })
 
--- TOGGLE: Auto move item to chest when health is low
+-- ✅ TOGGLE: Auto-move item pag low health
+local autoMove = false
 TabInv:AddToggle({
 	Name = "Auto Move if Health <= 80%",
-	Description = "Automatically moves the highlighted item to chest when health drops",
+	Description = "Automatically move highlighted item when health is low.",
 	Default = false,
 	Callback = function(Value)
-		autoMoveEnabled = Value
-		moved = false -- reset on toggle
+		autoMove = Value
 	end
 })
 
--- CLICK to highlight a part
-mouse.Button1Down:Connect(function()
-	if not highlightMode then return end
-
-	local target = mouse.Target
-	if target and target:IsDescendantOf(DynamicFurniture) then
-		local model = target:FindFirstAncestorOfClass("Model")
-		if model then
-			if currentHighlight then
-				currentHighlight:Destroy()
-			end
-
-			local highlight = Instance.new("Highlight")
-			highlight.FillColor = Color3.fromRGB(255, 255, 0)
-			highlight.OutlineColor = Color3.fromRGB(0, 0, 0)
-			highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-			highlight.Parent = model
-
-			currentHighlight = highlight
-			selectedModel = model
-			highlightMode = false
-
-			-- Get dynamic index
-			for i, obj in ipairs(DynamicFurniture:GetChildren()) do
-				if obj == model then
-					selectedIndex = i
+-- 🩺 Health Check Loop
+RunService.Heartbeat:Connect(function()
+	if autoMove and highlightedItem then
+		local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid and humanoid.Health <= (humanoid.MaxHealth * 0.8) then
+			-- Get latest version of the item from DynamicFurniture
+			local itemName = highlightedItem.Name
+			local found = nil
+			for _, child in ipairs(DynamicFurniture:GetChildren()) do
+				if child.Name == itemName then
+					found = child
 					break
 				end
 			end
-
-			print("Highlighted model at index:", selectedIndex)
-			moved = false -- allow move again if newly highlighted
+			if found then
+				for i = 0, 27 do
+					local args = {
+						[1] = i,
+						[2] = found
+					}
+					Remote:FireServer(unpack(args))
+				end
+				print("Item moved to chest because health is low.")
+				autoMove = false -- optional: turn off after one move
+			end
 		end
-	end
-end)
-
--- MONITOR HEALTH, auto-move item if enabled
-RunService.RenderStepped:Connect(function()
-	if not autoMoveEnabled or not selectedIndex then return end
-
-	local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-	if hum and hum.Health <= hum.MaxHealth * 0.8 and not moved then
-		local item = DynamicFurniture:GetChildren()[selectedIndex]
-		for i = 0, 27 do
-			local args = {
-				[1] = i,
-				[2] = item
-			}
-			Remote:FireServer(unpack(args))
-		end
-		print("Item auto-moved to chest due to low health.")
-		moved = true
 	end
 end)
 
