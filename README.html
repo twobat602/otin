@@ -509,93 +509,85 @@ TabCollect:AddToggle({
 local TabInv = Window:MakeTab({"Inventory", "save"})
 local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent you to lose valuable item\n if you're about to die"})
 
--- Variables
-local player = game.Players.LocalPlayer
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
 local mouse = player:GetMouse()
-local selectedPartIndex = nil
-local selectedPartRef = nil
-local moving = false
 
--- Button: Click to select/highlight part
-TabInv:AddButton({"Print", function(Value)
-    mouse.Button1Down:Connect(function()
-        local target = mouse.Target
-        if target and target:IsDescendantOf(workspace:WaitForChild("DynamicFurniture")) then
-            local parts = workspace.DynamicFurniture:GetChildren()
-            for i, part in ipairs(parts) do
-                if target == part or target:IsDescendantOf(part) then
-                    -- Unhighlight old
-                    if selectedPartRef and selectedPartRef:FindFirstChild("Highlight") then
-                        selectedPartRef.Highlight:Destroy()
-                    end
+local highlightedChest = nil
+local highlightInstance = nil
 
-                    selectedPartIndex = i - 1
-                    selectedPartRef = part
+-- Move Items Function
+local function moveItemsToChest(chestModel)
+	for i = 0, 27 do
+		local args = {
+			[1] = i;
+			[2] = chestModel;
+		}
+		ReplicatedStorage:WaitForChild("shared/network@GlobalEvents"):WaitForChild("moveItemToChest"):FireServer(unpack(args))
+	end
+end
 
-                    -- Highlight
-                    local highlight = Instance.new("Highlight", part)
-                    highlight.FillColor = Color3.new(1, 1, 0)
-                    highlight.OutlineColor = Color3.new(1, 1, 0)
+-- Add Click Chest Button
+TabInv:AddButton({"Click Chest", function()
+	if highlightedChest then return end
 
-                    -- Store index for later
-                    player:SetAttribute("SelectedPartIndex", selectedPartIndex)
-                    break
-                end
-            end
-        end
-    end)
+	print("Click a Chest model...")
+
+	mouse.Button1Down:Connect(function()
+		local target = mouse.Target
+		if target and target:IsDescendantOf(workspace:WaitForChild("DynamicFurniture")) then
+			local model = target:FindFirstAncestorOfClass("Model")
+			if model then
+				highlightedChest = model
+
+				-- Add highlight
+				highlightInstance = Instance.new("Highlight")
+				highlightInstance.FillColor = Color3.new(1, 1, 0)
+				highlightInstance.OutlineColor = Color3.new(1, 0, 0)
+				highlightInstance.Parent = model
+				highlightInstance.Adornee = model
+
+				print("Chest highlighted:", model.Name)
+			end
+		end
+	end)
 end})
 
--- Toggle: Auto move when HP <= 80%
+-- Add Reset Button
+TabInv:AddButton({"Reset", function()
+	if highlightInstance then
+		highlightInstance:Destroy()
+		highlightInstance = nil
+	end
+	highlightedChest = nil
+	print("Highlight reset.")
+end})
+
+-- Add Health Check Toggle
 local Toggle1 = TabInv:AddToggle({ 
-  Name = "Toggle",
-  Description = "This is a <font color='rgb(88, 101, 242)'>Toggle</font> Example",
-  Default = false 
+	Name = "Auto Move on Low HP",
+	Description = "Moves items to chest when HP <= 50",
+	Default = false 
 })
+local connection
 
-Toggle1:Callback(function(Value)
-    moving = Value
-
-    if Value then
-        -- Start loop
-        game:GetService("RunService").Heartbeat:Connect(function()
-            if not moving then return end
-            if player.Character and player.Character:FindFirstChild("Humanoid") then
-                local hum = player.Character.Humanoid
-                if hum.Health <= hum.MaxHealth * 0.8 then
-                    local index = player:GetAttribute("SelectedPartIndex")
-                    if index ~= nil then
-                        local part = workspace:WaitForChild("DynamicFurniture"):GetChildren()[index + 1]
-
-                        -- Move from 0 to 27
-                        for i = 0, 27 do
-                            local args = {
-                                [1] = i;
-                                [2] = part;
-                            }
-                            game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents"):WaitForChild("moveItemToChest"):FireServer(unpack(args))
-                        end
-
-                        moving = false -- stop after one run
-                    end
-                end
-            end
-        end)
-    end
+Toggle1:Callback(function(enabled)
+	if enabled then
+		connection = game:GetService("RunService").RenderStepped:Connect(function()
+			local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid.Health <= 50 and highlightedChest then
+				moveItemsToChest(highlightedChest)
+			end
+		end)
+	else
+		if connection then
+			connection:Disconnect()
+			connection = nil
+		end
+	end
 end)
 
--- Restore on respawn
-player.CharacterAdded:Connect(function()
-    task.wait(1)
-    local index = player:GetAttribute("SelectedPartIndex")
-    if index ~= nil then
-        local part = workspace:WaitForChild("DynamicFurniture"):GetChildren()[index + 1]
-        selectedPartRef = part
-        local highlight = Instance.new("Highlight", part)
-        highlight.FillColor = Color3.new(1, 1, 0)
-        highlight.OutlineColor = Color3.new(1, 1, 0)
-    end
-end)
 
 
 local TabShop = Window:MakeTab({"Shop", "shopping-cart"})
