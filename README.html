@@ -511,13 +511,16 @@ local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent 
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
 
 local highlightedChest = nil
 local highlightInstance = nil
+local healthConnection = nil
+local clickConnection = nil
 
--- Move Items Function
+-- Move items to chest (from index 0 to 27)
 local function moveItemsToChest(chestModel)
 	for i = 0, 27 do
 		local args = {
@@ -528,66 +531,113 @@ local function moveItemsToChest(chestModel)
 	end
 end
 
--- Add Click Chest Button
+-- Get first ProximityPrompt inside the chest
+local function getPromptInModel(model)
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("ProximityPrompt") then
+			return descendant
+		end
+	end
+	return nil
+end
+
+-- Highlight a chest model
+local function highlightChest(model)
+	if highlightInstance then
+		highlightInstance:Destroy()
+	end
+
+	highlightedChest = model
+
+	highlightInstance = Instance.new("Highlight")
+	highlightInstance.FillColor = Color3.new(1, 1, 0)
+	highlightInstance.OutlineColor = Color3.new(1, 0, 0)
+	highlightInstance.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	highlightInstance.Parent = model
+	highlightInstance.Adornee = model
+end
+
+-- CLICK CHEST BUTTON
 TabInv:AddButton({"Click Chest", function()
 	if highlightedChest then return end
 
 	print("Click a Chest model...")
 
-	mouse.Button1Down:Connect(function()
+	if clickConnection then
+		clickConnection:Disconnect()
+	end
+
+	clickConnection = mouse.Button1Down:Connect(function()
 		local target = mouse.Target
-		if target and target:IsDescendantOf(workspace:WaitForChild("DynamicFurniture")) then
-			local model = target:FindFirstAncestorOfClass("Model")
-			if model then
-				highlightedChest = model
+		if not target then return end
 
-				-- Add highlight
-				highlightInstance = Instance.new("Highlight")
-				highlightInstance.FillColor = Color3.new(1, 1, 0)
-				highlightInstance.OutlineColor = Color3.new(1, 0, 0)
-				highlightInstance.Parent = model
-				highlightInstance.Adornee = model
-
+		local model = target:FindFirstAncestorOfClass("Model")
+		if model and model:IsDescendantOf(workspace:WaitForChild("DynamicFurniture")) then
+			if not highlightedChest then
+				highlightChest(model)
 				print("Chest highlighted:", model.Name)
+
+				if clickConnection then
+					clickConnection:Disconnect()
+				end
 			end
 		end
 	end)
 end})
 
--- Add Reset Button
+-- RESET BUTTON
 TabInv:AddButton({"Reset", function()
 	if highlightInstance then
 		highlightInstance:Destroy()
 		highlightInstance = nil
 	end
 	highlightedChest = nil
+
+	if clickConnection then
+		clickConnection:Disconnect()
+		clickConnection = nil
+	end
+
 	print("Highlight reset.")
 end})
 
--- Add Health Check Toggle
+-- OPEN CHEST BUTTON
+TabInv:AddButton({"Open Chest", function()
+	if highlightedChest then
+		local prompt = getPromptInModel(highlightedChest)
+		if prompt then
+			fireproximityprompt(prompt)
+			print("Chest opened via ProximityPrompt.")
+		else
+			warn("No ProximityPrompt found in chest.")
+		end
+	else
+		warn("No chest selected.")
+	end
+end})
+
+-- TOGGLE: Auto Move on Low Health
 local Toggle1 = TabInv:AddToggle({ 
 	Name = "Auto Move on Low HP",
-	Description = "Moves items to chest when HP <= 50",
+	Description = "Moves items when HP <= 50",
 	Default = false 
 })
-local connection
 
 Toggle1:Callback(function(enabled)
 	if enabled then
-		connection = game:GetService("RunService").RenderStepped:Connect(function()
+		healthConnection = RunService.RenderStepped:Connect(function()
 			local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 			if humanoid and humanoid.Health <= 50 and highlightedChest then
 				moveItemsToChest(highlightedChest)
 			end
 		end)
 	else
-		if connection then
-			connection:Disconnect()
-			connection = nil
+		if healthConnection then
+			healthConnection:Disconnect()
+			healthConnection = nil
 		end
 	end
 end)
-
 
 
 local TabShop = Window:MakeTab({"Shop", "shopping-cart"})
