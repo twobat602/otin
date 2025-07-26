@@ -1,34 +1,52 @@
+-- Load RedzLib
 local redzlib = loadstring(game:HttpGet("https://raw.githubusercontent.com/tbao143/Library-ui/refs/heads/main/Redzhubui"))()
 
+-- Create main window
 local Window = redzlib:MakeWindow({
-  Title = "redz Hub : Blox Fruits",
-  SubTitle = "by redz9999",
-  SaveFolder = "testando | redz lib v5.lua"
+    Title = "redz Hub : Blox Fruits",
+    SubTitle = "by redz9999",
+    SaveFolder = "testando | redz lib v5.lua"
 })
 
+-- Add minimize button
 Window:AddMinimizeButton({
     Button = { Image = "rbxassetid://71014873973869", BackgroundTransparency = 0 },
     Corner = { CornerRadius = UDim.new(35, 1) },
 })
 
+-- Create tab
 local Tab1 = Window:MakeTab({"Um", "cherry"})
 
+-- Services and paths
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local GlobalEvent = ReplicatedStorage:WaitForChild("shared", 9e9):WaitForChild("network@GlobalEvents", 9e9):WaitForChild("collectBottleCollector", 9e9)
+local workspace = game:GetService("Workspace")
+
+-- Wait for RemoteEvent and parent model
+local GlobalEvent = ReplicatedStorage:WaitForChild("shared", 9e9)
+    :WaitForChild("network@GlobalEvents", 9e9)
+    :WaitForChild("collectBottleCollector", 9e9)
+
 local DynamicFurniture = workspace:WaitForChild("DynamicFurniture", 9e9)
 
+-- Add collect button
 Tab1:AddButton({
     Name = "Collect all Bottles",
     Callback = function()
-        for _, item in ipairs(DynamicFurniture:GetChildren()) do
-            if item.Name == "BottleCollector3" then
-                for _, child in ipairs(item:GetChildren()) do
-                    local args = {
-                        [1] = child
-                    }
-                    GlobalEvent:FireServer(unpack(args))
+        local success, err = pcall(function()
+            local count = 0
+            for _, item in ipairs(DynamicFurniture:GetChildren()) do
+                if item.Name == "BottleCollector3" then
+                    for _, child in ipairs(item:GetChildren()) do
+                        GlobalEvent:FireServer(child)
+                        count += 1
+                    end
                 end
             end
+            print("Collected", count, "bottles.")
+        end)
+
+        if not success then
+            warn("Error collecting bottles:", err)
         end
     end
 })
