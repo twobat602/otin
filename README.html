@@ -164,7 +164,18 @@ TabCollect:AddButton({"Collect All TrashCan", function()
     end
 end})
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local GlobalEvent = ReplicatedStorage:WaitForChild("shared", 9e9):WaitForChild("network@GlobalEvents", 9e9):WaitForChild("collectBottleCollector", 9e9)
+local BottleCollector3 = workspace:WaitForChild("DynamicFurniture", 9e9):WaitForChild("BottleCollector3", 9e9)
 
+TabCollect:AddButton({
+    Name = "Collect all Bottles",
+    Callback = function()
+        for _, child in ipairs(BottleCollector3:GetChildren()) do
+            GlobalEvent:FireServer(child)
+        end
+    end
+})
 
 local Section = TabCollect:AddSection({"Auto Collect"})
 
@@ -751,72 +762,3 @@ TabSetting:AddToggle({
         end
     end
 })
-
-local TabMul = Window:MakeTab({"Multiple Collect", "cherry"})
-
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local player = Players.LocalPlayer
-local mouse = player:GetMouse()
-
-local GlobalEvent = ReplicatedStorage:WaitForChild("shared", 9e9):WaitForChild("network@GlobalEvents", 9e9):WaitForChild("collectBottleCollector", 9e9)
-local DynamicFurniture = workspace:WaitForChild("DynamicFurniture", 9e9)
-
-local selectedModels = {}
-local selectionEnabled = false
-
--- Toggle: Enable/Disable selection
-local Toggle1 = TabMul:AddToggle({
-	Name = "Select Bottle Collector",
-	Description = "Select all<font color='rgb(88, 101, 242)'>Bottle Collector</font> to highlights",
-	Default = false
-})
-
-Toggle1:Callback(function(Value)
-	selectionEnabled = Value
-end)
-
--- Highlight function
-local function highlight(model)
-	local highlightInstance = Instance.new("Highlight")
-	highlightInstance.Name = "SelectionHighlight"
-	highlightInstance.FillColor = Color3.fromRGB(88, 101, 242)
-	highlightInstance.OutlineColor = Color3.new(1, 1, 1)
-	highlightInstance.OutlineTransparency = 0
-	highlightInstance.Parent = model
-end
-
-local function unhighlight(model)
-	local hl = model:FindFirstChild("SelectionHighlight")
-	if hl then
-		hl:Destroy()
-	end
-end
-
--- Mouse click to select models
-mouse.Button1Down:Connect(function()
-	if not selectionEnabled then return end
-	local target = mouse.Target
-	if target and target:IsDescendantOf(DynamicFurniture) then
-		local model = target:FindFirstAncestorOfClass("Model")
-		if model and not selectedModels[model] then
-			selectedModels[model] = true
-			highlight(model)
-		end
-	end
-end)
-
--- Button: Run the script for each selected model
-TabMul:AddButton({"Collect", function()
-	for model in pairs(selectedModels) do
-		GlobalEvent:FireServer(model)
-	end
-end})
-
--- Button: Reset selection
-TabMul:AddButton({"Reset", function()
-	for model in pairs(selectedModels) do
-		unhighlight(model)
-	end
-	selectedModels = {}
-end})
