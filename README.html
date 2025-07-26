@@ -398,87 +398,9 @@ TabCollect:AddToggle({
 local Section = TabCollect:AddSection({"Section"})
 local Paragraph = TabCollect:AddParagraph({"Multiple Collect Bottle Collector", "This is multiple collect on the Bottle Collector it's not automatic\nbut it can collect from all selected Bottle Collectors at the same time."})
 
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local mouse = player:GetMouse()
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local GlobalEvent = ReplicatedStorage:WaitForChild("shared", 9e9):WaitForChild("network@GlobalEvents", 9e9):WaitForChild("collectBottleCollector", 9e9)
-local dynamicFurniture = workspace:WaitForChild("DynamicFurniture", 9e9)
-
-local selectedModels = {}
-local selectionBoxes = {}
-local selectionEnabled = false
-
--- Toggle to allow multi-selection
-local Toggle1 = TabCollect:AddToggle({ 
-    Name = "Select Bottle Collector", 
-    Description = "Select all <font color='rgb(88, 101, 242)'>Bottle Collector</font> to highlight", 
-    Default = false 
-})
-
-Toggle1:Callback(function(Value)
-    selectionEnabled = Value
-end)
-
--- Mouse click for selecting models
-mouse.Button1Down:Connect(function()
-    if not selectionEnabled then return end
-
-    local target = mouse.Target
-    if not target then return end
-
-    local model = target:FindFirstAncestorOfClass("Model")
-    if not model then return end
-    if not dynamicFurniture:FindFirstChild(model.Name) and model.Parent ~= dynamicFurniture then return end
-
-    -- Toggle highlight
-    if selectedModels[model] then
-        selectedModels[model] = nil
-        if selectionBoxes[model] then
-            selectionBoxes[model]:Destroy()
-            selectionBoxes[model] = nil
-        end
-    else
-        selectedModels[model] = true
-
-        local box = Instance.new("SelectionBox")
-        box.Adornee = model
-        box.Color3 = Color3.fromRGB(0, 170, 255)
-        box.LineThickness = 0.05
-        box.SurfaceTransparency = 0.5
-        box.Parent = model
-        selectionBoxes[model] = box
-    end
-end)
-
--- Button to collect from all selected models
-TabCollect:AddButton({
-    "Collect",
-    function()
-        for model in pairs(selectedModels) do
-            local index = table.find(dynamicFurniture:GetChildren(), model)
-            if index then
-                local args = {
-                    [1] = dynamicFurniture:GetChildren()[index]
-                }
-                GlobalEvent:FireServer(unpack(args))
-            end
-        end
-    end
-})
-
--- Button to clear all selections
-TabCollect:AddButton({
-    "Clear Selection",
-    function()
-        for model, box in pairs(selectionBoxes) do
-            if box then box:Destroy() end
-        end
-        selectedModels = {}
-        selectionBoxes = {}
-    end
-})
-
+TabCollect:AddButton({"Print", function(Value)
+print("Hello World!")
+end})
 
 local Section = TabCollect:AddSection({"Esp Item"})
 local Paragraph = TabCollect:AddParagraph({"!", "Don't enable them all at the same time to avoid issues. This is still in beta, so expect some bugs."})
