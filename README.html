@@ -504,83 +504,74 @@ TabCollect:AddToggle({
     end
 })
 
-local TabMul = Window:MakeTab({"Multple Collect", "list-collapse"})
+local TabMul = Window:MakeTab({"Multiple Collect", "cherry"})
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local GlobalEvent = ReplicatedStorage:WaitForChild("shared", 9e9):WaitForChild("network@GlobalEvents", 9e9):WaitForChild("collectBottleCollector", 9e9)
-local dynamicFurniture = workspace:WaitForChild("DynamicFurniture", 9e9)
+local DynamicFurniture = workspace:WaitForChild("DynamicFurniture", 9e9)
 
 local selectedModels = {}
-local selectionBoxes = {}
 local selectionEnabled = false
 
--- Toggle: Enable/disable model selection
-local Toggle1 = TabMul:AddToggle({ 
-    Name = "Select Bottle Collector", 
-    Description = "Select all <font color='rgb(88, 101, 242)'>Bottle Collector</font> to highlight", 
-    Default = false 
+-- Toggle: Enable/Disable selection
+local Toggle1 = TabMul:AddToggle({
+	Name = "Select Bottle Collector",
+	Description = "Select all<font color='rgb(88, 101, 242)'>Bottle Collector</font> to highlights",
+	Default = false
 })
 
 Toggle1:Callback(function(Value)
-    selectionEnabled = Value
+	selectionEnabled = Value
 end)
 
--- Model click selection
+-- Highlight function
+local function highlight(model)
+	local highlightInstance = Instance.new("Highlight")
+	highlightInstance.Name = "SelectionHighlight"
+	highlightInstance.FillColor = Color3.fromRGB(88, 101, 242)
+	highlightInstance.OutlineColor = Color3.new(1, 1, 1)
+	highlightInstance.OutlineTransparency = 0
+	highlightInstance.Parent = model
+end
+
+local function unhighlight(model)
+	local hl = model:FindFirstChild("SelectionHighlight")
+	if hl then
+		hl:Destroy()
+	end
+end
+
+-- Mouse click to select models
 mouse.Button1Down:Connect(function()
-    if not selectionEnabled then return end
-
-    local target = mouse.Target
-    if not target then return end
-
-    local model = target:FindFirstAncestorOfClass("Model")
-    if not model then return end
-    if model.Parent ~= dynamicFurniture then return end
-
-    -- Toggle selection
-    if selectedModels[model] then
-        selectedModels[model] = nil
-        if selectionBoxes[model] then
-            selectionBoxes[model]:Destroy()
-            selectionBoxes[model] = nil
-        end
-    else
-        selectedModels[model] = true
-
-        local box = Instance.new("SelectionBox")
-        box.Adornee = model
-        box.Color3 = Color3.fromRGB(0, 170, 255)
-        box.LineThickness = 0.05
-        box.SurfaceTransparency = 0.5
-        box.Parent = model
-        selectionBoxes[model] = box
-    end
+	if not selectionEnabled then return end
+	local target = mouse.Target
+	if target and target:IsDescendantOf(DynamicFurniture) then
+		local model = target:FindFirstAncestorOfClass("Model")
+		if model and not selectedModels[model] then
+			selectedModels[model] = true
+			highlight(model)
+		end
+	end
 end)
 
--- Button: Collect all selected Bottle Collectors
-TabMul:AddButton({"Collect", function(Value)
-    for model in pairs(selectedModels) do
-        local index = table.find(dynamicFurniture:GetChildren(), model)
-        if index then
-            local args = {
-                [1] = dynamicFurniture:GetChildren()[index]
-            }
-            GlobalEvent:FireServer(unpack(args))
-        end
-    end
+-- Button: Run the script for each selected model
+TabMul:AddButton({"Collect", function()
+	for model in pairs(selectedModels) do
+		GlobalEvent:FireServer(model)
+	end
 end})
 
--- Button: Clear all selections
-TabMul:AddButton({"Clear Selection", function(Value)
-    for model, box in pairs(selectionBoxes) do
-        if box then box:Destroy() end
-    end
-    selectedModels = {}
-    selectionBoxes = {}
+-- Button: Reset selection
+TabMul:AddButton({"Reset", function()
+	for model in pairs(selectedModels) do
+		unhighlight(model)
+	end
+	selectedModels = {}
 end})
-
 
 local TabInv = Window:MakeTab({"Inventory", "save"})
 local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent you to lose valuable item\n if you're about to die"})
