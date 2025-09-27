@@ -1,798 +1,968 @@
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
+local Window = WindUI:CreateWindow({
+    Title = "99 Nights",
+    ToggleKey = Enum.KeyCode.C,
+    Icon = "cat",
+    Author = "Twobat",
+    Folder = "MyTestHub",
+
+Size = UDim2.fromOffset(400, 300),
+    Transparent = true,
+    Theme = "Dark",
+    Resizable = true,
+    SideBarWidth = 200,
+    BackgroundImageTransparency = 0.42,
+    HideSearchBar = false,
+    ScrollBarEnabled = true
+})
+
+Window:Tag({
+    Title = "V1.0",
+    Color = Color3.fromHex("#fa0a42")
+})
+
+Window:Tag({
+    Title = "Free",
+    Color = Color3.fromHex("#30ff6a")
+})
+
+--TAB
+
+local Main = Window:Tab({
+    Title = "Main",
+    Icon = "house",
+    Locked = false,
+})
+
+local Collect = Window:Tab({
+    Title = "Collect",
+    Icon = "box",
+    Locked = false,
+})
+
+local Combat = Window:Tab({
+    Title = "Combat",
+    Icon = "box",
+    Locked = false,
+})
+
+
+local Setting = Window:Tab({
+    Title = "Setting",
+    Icon = "settings",
+    Locked = false,
+})
+
+local Report = Window:Tab({
+    Title = "Found Bugs?",
+    Icon = "bug",
+    Locked = false,
+})
+
 local player = game.Players.LocalPlayer
-local redzlib = loadstring(game:HttpGet("https://raw.githubusercontent.com/tbao143/Library-ui/refs/heads/main/Redzhubui"))()
-local Window = redzlib:MakeWindow({
-    Title = "redz Hub : The Sewers",
-    SubTitle = "by Twobat",
-    SaveFolder = "testando | redz lib v5.lua"
-})
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
 
-Window:AddMinimizeButton({
-    Button = { Image = "rbxassetid://119965632862212", BackgroundTransparency = 0 },
-    Corner = { CornerRadius = UDim.new(35, 1) },
-})
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
 
--- Player Tab
-local TabPlayer = Window:MakeTab({"Player", "person"})
-Window:SelectTab(TabPlayer)
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local camera = workspace.CurrentCamera
 
-local Paragraph = TabPlayer:AddParagraph({"⚠ Take Note!", "This script is still in beta, so you might encounter some bugs."})
 
--- Initial player list
-local function getPlayerNames()
-    local names = {}
-    for _, plr in ipairs(game.Players:GetPlayers()) do
-        if plr ~= player then -- Hindi isasama ang sarili sa listahan
-            table.insert(names, plr.Name)
+-- WalkSpeed Slider
+local Slider = Main:Slider({
+    Title = "WalkSpeed",
+    Step = 1,
+    Value = {
+        Min = 16,    -- bawal bumaba sa 16
+        Max = 120,   -- maximum walk speed
+        Default = 16, -- default walk speed
+    },
+    Callback = function(value)
+        if humanoid then
+            humanoid.WalkSpeed = value
         end
     end
-    return names
+})
+
+-- JumpPower Slider
+local Slider = Main:Slider({
+    Title = "JumpPower",
+    Step = 1,
+    Value = {
+        Min = 50,    -- bawal bumaba sa 50
+        Max = 200,   -- maximum jump power
+        Default = 50, -- default jump power
+    },
+    Callback = function(value)
+        if humanoid then
+            humanoid.UseJumpPower = true
+            humanoid.JumpPower = value
+        end
+    end
+})
+
+local UnliJump = false
+local player = game.Players.LocalPlayer
+local humanoid
+
+-- Re-assign humanoid sa respawn
+local function setupHumanoid(h)
+    humanoid = h
 end
 
-local playerNames = getPlayerNames()
-
--- Player List Dropdown
-local selectedPlayer = nil
-local playerDropdown = TabPlayer:AddDropdown({
-    Name = "Players List",
-    Description = "Select a player to teleport to",
-    Options = playerNames, 
-    Default = "",
-    Flag = "PlayerDropdown",
-    Callback = function(Value)
-        selectedPlayer = Value
-    end
-})
-
--- Function para i-update ang player list
-local function updatePlayerList()
-    local updatedNames = getPlayerNames()
-    playerDropdown:Refresh(updatedNames)
+if player.Character then
+    setupHumanoid(player.Character:WaitForChild("Humanoid"))
 end
 
--- Auto-refresh kapag may nag-join o nag-leave
-game.Players.PlayerAdded:Connect(updatePlayerList)
-game.Players.PlayerRemoving:Connect(updatePlayerList)
+player.CharacterAdded:Connect(function(char)
+    setupHumanoid(char:WaitForChild("Humanoid"))
+end)
 
--- Refresh Button
-TabPlayer:AddButton({
-    Name = "Refresh Player List",
-    Callback = function()
-        updatePlayerList()
+-- Toggle para sa Infinite Jump
+local Toggle = Main:Toggle({
+    Title = "Unli Jump",
+    Desc = "Jump anytime, even in air",
+    Icon = "badge-check",
+    Type = "Checkbox",
+    Default = false,
+    Callback = function(state)
+        UnliJump = state
     end
 })
 
--- Teleport Button (Ikaw ang pupunta sa napiling player)
-TabPlayer:AddButton({
-    Name = "Teleport to Player",
-    Callback = function()
-        if selectedPlayer then
-            local targetPlayer = game.Players:FindFirstChild(selectedPlayer)
-            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                player.Character.HumanoidRootPart.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
-            end
-        end
+-- Infinite Jump Script
+game:GetService("UserInputService").JumpRequest:Connect(function()
+    if UnliJump and humanoid then
+        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+local RunService = game:GetService("RunService")
+local player = game.Players.LocalPlayer
+local NoClip = false
+
+-- Character references
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Update character references on respawn
+player.CharacterAdded:Connect(function(char)
+    character = char
+    humanoidRootPart = char:WaitForChild("HumanoidRootPart")
+end)
+
+-- Noclip toggle
+local Toggle = Main:Toggle({
+    Title = "Noclip",
+    Desc = "Pass through walls",
+    Icon = "badge-check",
+    Type = "Checkbox",
+    Default = false,
+    Callback = function(state)
+        NoClip = state
     end
 })
-
-local Paragraph = TabPlayer:AddParagraph({"How to use bring player", "Click the Bring button first and place it in the ground, and select player, create a clan\nask the player to join and ask to sit. Go to loc you want and click bring ang place the beanbag on the ground"})
-
--- Get BeanBag Button
-TabPlayer:AddButton({"Bring player", function()
-    local beanBag = game.Workspace.DynamicFurniture:FindFirstChild("BeanBag")
-    if beanBag and beanBag:FindFirstChild("MeshPart") then
-        local meshPart = beanBag.MeshPart
-        local ownerAttribute = beanBag:GetAttribute("Owner")
-
-        if ownerAttribute == nil or ownerAttribute == player.UserId then
-            local frontPosition = player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -5)
-            meshPart.CFrame = frontPosition
-        end
-    end
-end})
-
-local TabCollect = Window:MakeTab({"Collect", "cherry"})
-
-local Paragraph = TabCollect:AddParagraph({"Farm gear/bottle", "This is not automatically place, you need a Extractor for farming gear and bottle"})
-
-TabCollect:AddButton({"Collect All Scrap2", function()
-    for _, scrap in ipairs(game.Workspace.DynamicFurniture:GetChildren()) do
-        if scrap:IsA("Model") and scrap.Name == "Scrap2" then
-            local ownerAttribute = scrap:GetAttribute("Owner")
-
-            -- Iteteleport lang ang Scrap2 kung wala itong may-ari
-            if ownerAttribute == nil then
-                local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                local smoothPart = scrap:FindFirstChildWhichIsA("MeshPart") -- Hahanapin ang MeshPart
-                
-                if playerRoot and smoothPart then
-                    smoothPart.CFrame = playerRoot.CFrame * CFrame.new(0, 0, -2)
-                end
+-- Loop para sa Noclip
+RunService.RenderStepped:Connect(function()
+    if NoClip and character then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
             end
         end
     end
-end})
-
-TabCollect:AddButton({"Collect All Pallet2", function()
-    for _, pallet in ipairs(game.Workspace.DynamicFurniture:GetChildren()) do
-        if pallet:IsA("Model") and pallet.Name == "Pallet2" then
-            local ownerAttribute = pallet:GetAttribute("Owner")
-
-            -- Iteteleport lang ang Pallet2 kung wala itong may-ari
-            if ownerAttribute == nil then
-                local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                if playerRoot then
-                    pallet:SetPrimaryPartCFrame(playerRoot.CFrame * CFrame.new(0, 0, -2))
-                end
-            end
-        end
-    end
-end})
-
-TabCollect:AddButton({"Collect All Television", function()
-    for _, tv in ipairs(game.Workspace.DynamicFurniture:GetChildren()) do
-        if tv:IsA("Model") and tv.Name == "Television" then
-            local ownerAttribute = tv:GetAttribute("Owner")
-
-            -- Iteteleport lang ang Television kung wala itong may-ari
-            if ownerAttribute == nil then
-                local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                local smoothPart = tv:FindFirstChildWhichIsA("MeshPart") -- Hahanapin ang MeshPart
-                
-                if playerRoot and smoothPart then
-                    smoothPart.CFrame = playerRoot.CFrame * CFrame.new(0, 0, -2)
-                end
-            end
-        end
-    end
-end})
-
-TabCollect:AddButton({"Collect All TrashCan", function()
-    for _, trash in ipairs(game.Workspace.DynamicFurniture:GetChildren()) do
-        if trash:IsA("Model") and trash.Name == "TrashCan" then
-            local ownerAttribute = trash:GetAttribute("Owner")
-
-            -- Iteteleport lang ang TrashCan kung wala itong may-ari
-            if ownerAttribute == nil then
-                local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                local smoothPart = trash:FindFirstChildWhichIsA("MeshPart") -- Hahanapin ang MeshPart
-                
-                if playerRoot and smoothPart then
-                    smoothPart.CFrame = playerRoot.CFrame * CFrame.new(0, 0, -2)
-                end
-            end
-        end
-    end
-end})
+end)
 
 
+-- Flying variables
+local flying = false
+local bodyVelocity
+local bodyGyro
 
-local Section = TabCollect:AddSection({"Auto Collect"})
+-- Fly speed variables
+local targetFlySpeed = 70
+local currentFlySpeed = 70
 
+-- NoClip toggle
+local NoClip = false
 local teleporting = false
 
-TabCollect:AddToggle({
-    Name = "Collect Snow",
-    Default = false,
-    Callback = function(v)
-        teleporting = v
+-- Update character references on respawn
+player.CharacterAdded:Connect(function(char)
+    character = char
+    rootPart = character:WaitForChild("HumanoidRootPart")
+    humanoid = character:WaitForChild("Humanoid")
+end)
 
-        if teleporting then
-            local player = game.Players.LocalPlayer
-            local character = player.Character
-            if not character then return end
+-- Functions
+local function startFlying()
+    if flying or not rootPart then return end
+    flying = true
 
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            local rootPart = character:FindFirstChild("HumanoidRootPart")
-            local camera = workspace.CurrentCamera
-            if not humanoid or not rootPart or not camera then return end
+    bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bodyVelocity.Velocity = Vector3.new(0,0,0)
+    bodyVelocity.Parent = rootPart
 
-            humanoid.WalkSpeed = 0
+    bodyGyro = Instance.new("BodyGyro")
+    bodyGyro.MaxTorque = Vector3.new(9e9,9e9,9e9)
+    bodyGyro.CFrame = camera.CFrame
+    bodyGyro.Parent = rootPart
+end
 
-            for _, snow in ipairs(workspace.DynamicFurniture:GetChildren()) do
-                if not teleporting then break end
+local function stopFlying()
+    if not flying then return end
+    flying = false
+    if bodyVelocity then bodyVelocity:Destroy(); bodyVelocity=nil end
+    if bodyGyro then bodyGyro:Destroy(); bodyGyro=nil end
+end
 
-                if snow:IsA("Model") and snow.Name == "Snow" then
-                    local meshPart = snow:FindFirstChildWhichIsA("MeshPart")
-                    local prompt = snow:FindFirstChildWhichIsA("ProximityPrompt")
+-- Flying & NoClip update loop
+RunService.RenderStepped:Connect(function()
+    if not rootPart or not character then return end
 
-                    if meshPart and prompt then
-                        rootPart.CFrame = meshPart.CFrame
-                        task.wait(0.2)
-                        camera.CFrame = CFrame.new(camera.CFrame.Position, rootPart.Position - Vector3.new(0, 15, 0))
-                        task.wait(0.5)
-
-                        if prompt.ClickablePrompt then
-                            fireproximityprompt(prompt, 0)
-                            task.wait(0.3)
-                            fireproximityprompt(prompt, 1)
-                        else
-                            fireproximityprompt(prompt)
-                        end
-
-                        task.wait(2)
-                    end
-                end
+    -- NoClip
+    if NoClip then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
             end
-
-            humanoid.WalkSpeed = 16
         end
     end
-})
 
-local collectingBurger = false
-local noclipConnection
+    -- Fly
+    if flying and bodyVelocity and bodyGyro then
+        currentFlySpeed = currentFlySpeed + (targetFlySpeed - currentFlySpeed) * 0.1
 
-TabCollect:AddToggle({
-    Name = "Collect Burger",
+        local direction = Vector3.new()
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then direction += camera.CFrame.LookVector*currentFlySpeed end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then direction += camera.CFrame.LookVector*-currentFlySpeed end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then direction += camera.CFrame.RightVector*-currentFlySpeed end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then direction += camera.CFrame.RightVector*currentFlySpeed end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then direction += Vector3.new(0,currentFlySpeed,0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then direction += Vector3.new(0,-currentFlySpeed,0) end
+
+        bodyVelocity.Velocity = direction
+        bodyGyro.CFrame = CFrame.new(rootPart.Position, rootPart.Position + camera.CFrame.LookVector)
+    end
+end)
+
+-- Fly toggle
+local Toggle = Main:Toggle({
+    Title = "Fly",
+    Desc = "Allow this so you can fly",
+    Icon = "badge-check",
+    Type = "Checkbox",
     Default = false,
-    Callback = function(v)
-        collectingBurger = v
+    Callback = function(state)
+        if state then
+            startFlying()
+        else
+            stopFlying()
+        end
+    end
+})
+Toggle:Lock()
+-- Fly speed slider
+local Slider = Main:Slider({
+    Title = "Fly Speed",
+    Step = 1,
+    Value = {Min = 70, Max = 200, Default = 70},
+    Callback = function(value)
+        targetFlySpeed = value
+        print("Target fly speed: "..value)
+    end
+})
 
-        if collectingBurger then
-            task.spawn(function()
-                local player = game.Players.LocalPlayer
-                local character = player.Character
-                if not character then return end
+Slider:Lock()
 
-                local humanoid = character:FindFirstChildOfClass("Humanoid")
-                local rootPart = character:FindFirstChild("HumanoidRootPart")
-                local camera = workspace.CurrentCamera
-                if not humanoid or not rootPart or not camera then return end
+-- F key toggle
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.F then
+        if flying then
+            stopFlying()
+            Toggle:Set(false)
+        else
+            startFlying()
+            Toggle:Set(true)
+        end
+    end
+end)
 
-                humanoid.WalkSpeed = 0
+-- Stop flying kapag namatay
+humanoid.Died:Connect(stopFlying)
 
-                noclipConnection = game:GetService("RunService").Stepped:Connect(function()
-                    for _, part in pairs(character:GetDescendants()) do
-                        if part:IsA("BasePart") and part.CanCollide then
-                            part.CanCollide = false
-                        end
-                    end
-                end)
+--Collect fuel
+local Section = Collect:Section({ 
+    Title = "Fuel Section",
+    TextXAlignment = "Left",
+    TextSize = 17, -- Default Size
+})
+--// Function: drag, tp, undrag
+local function dragTpUndrag(item)
+    local player = game.Players.LocalPlayer
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
 
-                while collectingBurger do
-                    for _, burger in ipairs(workspace.DynamicFurniture:GetChildren()) do
-                        if not collectingBurger then break end
+    -- RemoteEvents
+    local remotes = game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvents", 9e9)
+    local startDrag = remotes:WaitForChild("RequestStartDraggingItem", 9e9)
+    local stopDrag = remotes:WaitForChild("StopDraggingItem", 9e9)
 
-                        if burger:IsA("Model") and burger.Name == "Burger" then
-                            local meshPart = burger:FindFirstChildWhichIsA("MeshPart")
-                            local prompt = burger:FindFirstChildWhichIsA("ProximityPrompt")
+    -- Drag
+    startDrag:FireServer(item)
 
-                            if meshPart and prompt then
-                                rootPart.CFrame = CFrame.new(meshPart.Position + Vector3.new(0, 6, 0))
-                                task.wait(0.2)
-                                camera.CFrame = CFrame.new(camera.CFrame.Position, rootPart.Position - Vector3.new(0, 15, 0))
-                                task.wait(0.5)
+    -- Teleport
+    task.wait(0)
+    if item:IsA("BasePart") then
+        item.CFrame = hrp.CFrame * CFrame.new(0, 0, -3)
+    elseif item:IsA("Model") and item.PrimaryPart then
+        item:SetPrimaryPartCFrame(hrp.CFrame * CFrame.new(0, 0, -3))
+    end
 
-                                if prompt.ClickablePrompt then
-                                    fireproximityprompt(prompt, 0)
-                                    task.wait(0.3)
-                                    fireproximityprompt(prompt, 1)
-                                else
-                                    fireproximityprompt(prompt)
-                                end
+    -- Undrag
+    stopDrag:FireServer(item)
+end
 
-                                task.wait(2)
-                            end
-                        end
-                    end
-                    task.wait(1)
-                end
+--// Variable to store selected value
+local selectedItem = "Log"
 
-                if noclipConnection then
-                    noclipConnection:Disconnect()
-                    noclipConnection = nil
-                end
+--// Dropdown (pili lang muna, walang auto collect)
+local Dropdown = Collect:Dropdown({
+    Title = "Collect Item",
+    Values = { "Log", "Fuel Canister", "Coal", "Oil Barrel", "Sapling" },
+    Value = "Log",
+    Callback = function(option)
+        selectedItem = option -- store the choice lang
+        print("Selected item: " .. option)
+    end
+})
 
-                humanoid.WalkSpeed = 16
-            end)
+--// Button (dito lang magcocollect pag pinindot)
+local Button = Collect:Button({
+    Title = "Collect",
+    Desc = "Collect selected items",
+    Locked = false,
+    Callback = function()
+        for _, obj in ipairs(workspace:WaitForChild("Items", 9e9):GetChildren()) do
+            if obj.Name == selectedItem then
+                dragTpUndrag(obj)
+                task.wait(0.1)
+            end
         end
     end
 })
 
-local collectingCheese = false
+local Section = Collect:Section({ 
+    Title = "Gear Section",
+    TextXAlignment = "Left",
+    TextSize = 17, -- Default Size
+})
+--// Function: drag, tp, undrag
+local function dragTpUndrag(item)
+    local player = game.Players.LocalPlayer
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
 
-TabCollect:AddToggle({
-    Name = "Collect Cheese",
-    Default = false,
-    Callback = function(v)
-        collectingCheese = v
+    -- RemoteEvents
+    local remotes = game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvents", 9e9)
+    local startDrag = remotes:WaitForChild("RequestStartDraggingItem", 9e9)
+    local stopDrag = remotes:WaitForChild("StopDraggingItem", 9e9)
 
-        if collectingCheese then
-            task.spawn(function()
-                local player = game.Players.LocalPlayer
-                local character = player.Character
-                if not character then return end
+    -- Drag
+    startDrag:FireServer(item)
 
-                local humanoid = character:FindFirstChildOfClass("Humanoid")
-                local rootPart = character:FindFirstChild("HumanoidRootPart")
-                local camera = workspace.CurrentCamera
-                if not humanoid or not rootPart or not camera then return end
+    -- Teleport
+    task.wait(0)
+    if item:IsA("BasePart") then
+        item.CFrame = hrp.CFrame * CFrame.new(0, 0, -3)
+    elseif item:IsA("Model") and item.PrimaryPart then
+        item:SetPrimaryPartCFrame(hrp.CFrame * CFrame.new(0, 0, -3))
+    end
 
-                humanoid.WalkSpeed = 0
+    -- Undrag
+    stopDrag:FireServer(item)
+end
 
-                while collectingCheese do
-                    for _, cheese in ipairs(workspace.DynamicFurniture:GetChildren()) do
-                        if not collectingCheese then break end
+--// Variable to store selected value
+local selectedItem = "Bolt"
 
-                        if cheese:IsA("Model") and cheese.Name == "Cheese" then
-                            local prompt = cheese:FindFirstChildOfClass("ProximityPrompt")
-                            if prompt then
-                                rootPart.CFrame = CFrame.new(cheese.PrimaryPart.Position + Vector3.new(0, 3, 0))
-                                task.wait(0.1)
-                                camera.CFrame = CFrame.new(camera.CFrame.Position, rootPart.Position - Vector3.new(0, 15, 0))
+--// Dropdown (pili lang muna, walang auto collect)
+local Dropdown = Collect:Dropdown({
+    Title = "Collect Item",
+    Values = { "Bolt", "Old Radio", "Broken Fan", "Sheet Metal", "Bunny Foot", "Rifle Ammo", "Rifle", "Revolver Ammo", "Revolver", "Leather Body", "Wolf Pelt", "Bear Pelt", "Cultist Gem" },
+    Value = "Bolt",
+    Callback = function(option)
+        selectedItem = option -- store the choice lang
+        print("Selected item: " .. option)
+    end
+})
 
-                                if prompt.ClickablePrompt then
-                                    fireproximityprompt(prompt, 0)
-                                    task.wait(0.3)
-                                    fireproximityprompt(prompt, 1)
-                                else
-                                    fireproximityprompt(prompt)
-                                end
-
-                                task.wait(1.2)
-                            end
-                        end
-                    end
-                    task.wait(0.3)
-                end
-
-                humanoid.WalkSpeed = 16
-            end)
+--// Button (dito lang magcocollect pag pinindot)
+local Button = Collect:Button({
+    Title = "Collect",
+    Desc = "Collect selected items",
+    Locked = false,
+    Callback = function()
+        for _, obj in ipairs(workspace:WaitForChild("Items", 9e9):GetChildren()) do
+            if obj.Name == selectedItem then
+                dragTpUndrag(obj)
+                task.wait(0.1)
+            end
         end
     end
 })
 
-local collectingMushroom = false
+local Section = Collect:Section({ 
+    Title = "Food Section",
+    TextXAlignment = "Left",
+    TextSize = 17, -- Default Size
+})
+--// Function: drag, tp, undrag
+local function dragTpUndrag(item)
+    local player = game.Players.LocalPlayer
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
 
-TabCollect:AddToggle({
-    Name = "Collect Mushroom",
-    Default = false,
-    Callback = function(v)
-        collectingMushroom = v
+    -- RemoteEvents
+    local remotes = game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvents", 9e9)
+    local startDrag = remotes:WaitForChild("RequestStartDraggingItem", 9e9)
+    local stopDrag = remotes:WaitForChild("StopDraggingItem", 9e9)
 
-        if collectingMushroom then
-            task.spawn(function()
-                local player = game.Players.LocalPlayer
-                local character = player.Character
-                if not character then return end
+    -- Drag
+    startDrag:FireServer(item)
 
-                local humanoid = character:FindFirstChildOfClass("Humanoid")
-                local rootPart = character:FindFirstChild("HumanoidRootPart")
-                local camera = workspace.CurrentCamera
-                if not humanoid or not rootPart or not camera then return end
+    -- Teleport
+    task.wait(0)
+    if item:IsA("BasePart") then
+        item.CFrame = hrp.CFrame * CFrame.new(0, 0, -3)
+    elseif item:IsA("Model") and item.PrimaryPart then
+        item:SetPrimaryPartCFrame(hrp.CFrame * CFrame.new(0, 0, -3))
+    end
 
-                humanoid.WalkSpeed = 0
+    -- Undrag
+    stopDrag:FireServer(item)
+end
 
-                while collectingMushroom do
-                    for _, mushroom in ipairs(workspace.DynamicFurniture:GetChildren()) do
-                        if not collectingMushroom then break end
+--// Variable to store selected value
+local selectedItem = "Carrot"
 
-                        if mushroom:IsA("Model") and mushroom.Name == "MushroomBase" then
-                            local prompt = mushroom:FindFirstChildOfClass("ProximityPrompt")
-                            if prompt then
-                                rootPart.CFrame = CFrame.new(mushroom.PrimaryPart.Position + Vector3.new(0, 3, 0))
-                                task.wait(0.3)
-                                camera.CFrame = CFrame.new(camera.CFrame.Position, rootPart.Position - Vector3.new(0, 15, 0))
+--// Dropdown (pili lang muna, walang auto collect)
+local Dropdown = Collect:Dropdown({
+    Title = "Collect Item",
+    Values = { "Carrot", "Berry", "Morsel", "Steak", "Cooked Morsel", "Cooked Steak", "Cake"},
+    Value = "Carrot",
+    Callback = function(option)
+        selectedItem = option -- store the choice lang
+        print("Selected item: " .. option)
+    end
+})
 
-                                if prompt.ClickablePrompt then
-                                    fireproximityprompt(prompt, 0)
-                                    task.wait(1.2)
-                                    fireproximityprompt(prompt, 1)
-                                else
-                                    fireproximityprompt(prompt)
-                                end
-
-                                task.wait(1.5)
-                            end
-                        end
-                    end
-                    task.wait(0.5)
-                end
-
-                humanoid.WalkSpeed = 16
-            end)
+--// Button (dito lang magcocollect pag pinindot)
+local Button = Collect:Button({
+    Title = "Collect",
+    Desc = "Collect selected items",
+    Locked = false,
+    Callback = function()
+        for _, obj in ipairs(workspace:WaitForChild("Items", 9e9):GetChildren()) do
+            if obj.Name == selectedItem then
+                dragTpUndrag(obj)
+                task.wait(0.1)
+            end
         end
     end
 })
 
+local Section = Collect:Section({ 
+    Title = "Heal Section",
+    TextXAlignment = "Left",
+    TextSize = 17, -- Default Size
+})
+--// Function: drag, tp, undrag
+local function dragTpUndrag(item)
+    local player = game.Players.LocalPlayer
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
 
+    -- RemoteEvents
+    local remotes = game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvents", 9e9)
+    local startDrag = remotes:WaitForChild("RequestStartDraggingItem", 9e9)
+    local stopDrag = remotes:WaitForChild("StopDraggingItem", 9e9)
 
-local Section = TabCollect:AddSection({"Esp Item"})
-local Paragraph = TabCollect:AddParagraph({"!", "Don't enable them all at the same time to avoid issues. This is still in beta, so expect some bugs."})
+    -- Drag
+    startDrag:FireServer(item)
 
-local ESP_Enabled = {}
-local RunService = game:GetService("RunService")
+    -- Teleport
+    task.wait(0)
+    if item:IsA("BasePart") then
+        item.CFrame = hrp.CFrame * CFrame.new(0, 0, -3)
+    elseif item:IsA("Model") and item.PrimaryPart then
+        item:SetPrimaryPartCFrame(hrp.CFrame * CFrame.new(0, 0, -3))
+    end
+
+    -- Undrag
+    stopDrag:FireServer(item)
+end
+
+--// Variable to store selected value
+local selectedItem = "Bandage"
+
+--// Dropdown (pili lang muna, walang auto collect)
+local Dropdown = Collect:Dropdown({
+    Title = "Collect Item",
+    Values = { "Bandage", "MedKit"},
+    Value = "Bandage",
+    Callback = function(option)
+        selectedItem = option -- store the choice lang
+        print("Selected item: " .. option)
+    end
+})
+
+--// Button (dito lang magcocollect pag pinindot)
+local Button = Collect:Button({
+    Title = "Collect",
+    Desc = "Collect selected items",
+    Locked = false,
+    Callback = function()
+        for _, obj in ipairs(workspace:WaitForChild("Items", 9e9):GetChildren()) do
+            if obj.Name == selectedItem then
+                dragTpUndrag(obj)
+                task.wait(0.1)
+            end
+        end
+    end
+})
+
+-- auto fire
+
+--// Function: drag, tp, undrag to a target
+local function dragTpUndrag(item, targetCFrame)
+    local remotes = game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvents", 9e9)
+    local startDrag = remotes:WaitForChild("RequestStartDraggingItem", 9e9)
+    local stopDrag = remotes:WaitForChild("StopDraggingItem", 9e9)
+
+    -- Drag
+    startDrag:FireServer(item)
+
+    -- Wait then teleport to target
+    task.wait(0.2)
+    if item:IsA("BasePart") then
+        item.CFrame = targetCFrame
+    elseif item:IsA("Model") and item.PrimaryPart then
+        item:SetPrimaryPartCFrame(targetCFrame)
+    end
+
+    -- Undrag
+    stopDrag:FireServer(item)
+end
+
+--// Button to teleport items into MainFire
+local Button = Collect:Button({ 
+    Title = "Send Items to Fire",
+    Desc = "Drag → TP → Undrag sa MainFire",
+    Locked = false,
+    Callback = function()
+        local targetModel = workspace.Map.Campground:WaitForChild("MainFire", 9e9)
+        if not targetModel.PrimaryPart then
+            warn("⚠ MainFire has no PrimaryPart set! Please assign one in Roblox Studio.")
+            return
+        end
+
+        -- tinaas ng (0,10,0)
+        local targetCFrame = targetModel.PrimaryPart.CFrame * CFrame.new(0, 10, 0)
+
+        -- Mga pangalan ng items na i-tp
+        local allowedItems = {
+            Log = true,
+            Coal = true,
+            Bolt = true
+        }
+
+        for _, obj in ipairs(workspace:WaitForChild("Items", 9e9):GetChildren()) do
+            if allowedItems[obj.Name] then
+                dragTpUndrag(obj, targetCFrame)
+                task.wait(0.1) -- para hindi sabay-sabay
+            end
+        end
+    end
+})
+local Section = Combat:Section({ 
+    Title = "Manual Kill",
+    TextXAlignment = "Left",
+    TextSize = 17, -- Default Size
+})
+
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local player = Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local hrp = char:WaitForChild("HumanoidRootPart")
 
-local Colors = {
-    Burger = Color3.fromRGB(255, 0, 0), -- Red
-    Cheese = Color3.fromRGB(255, 255, 0), -- Yellow
-    MushroomBase = Color3.fromRGB(0, 255, 0) -- Green
+-- Dropdown values
+local npcList = {
+    "Bunny",
+    "Bear",
+    "Wolf",
+    "Alpha Wolf",
+    "Cultist",
+    "Scorpion",
+    "Crossbow Cultist",
+    "Hellephant"
 }
 
-local Beams = {}
+-- Selected NPC (default Bunny)
+local selectedNPC = "Bunny"
 
-function CreateESP(item, name)
-    -- Ensure PrimaryPart exists
-    if not item.PrimaryPart then
-        local basePart = item:FindFirstChildOfClass("BasePart")
-        if basePart then
-            item.PrimaryPart = basePart
+-- Dropdown UI
+local Dropdown = Combat:Dropdown({
+    Title = "Choose NPC",
+    Values = npcList,
+    Value = "Bunny",
+    Callback = function(option)
+        selectedNPC = option
+        print("NPC selected: " .. option)
+    end
+})
+
+-- Button UI
+local Button = Combat:Button({
+    Title = "Bring Selected NPC",
+    Desc = "Teleport NPC in front of you",
+    Locked = false,
+    Callback = function()
+        print("Teleporting: " .. selectedNPC)
+
+        for _, model in pairs(workspace.Characters:GetChildren()) do
+            if model:IsA("Model") and model.Name == selectedNPC then
+                -- siguraduhin may PrimaryPart
+                if not model.PrimaryPart then
+                    local root = model:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        model.PrimaryPart = root
+                    else
+                        for _, part in pairs(model:GetChildren()) do
+                            if part:IsA("BasePart") then
+                                model.PrimaryPart = part
+                                break
+                            end
+                        end
+                    end
+                end
+
+                if model.PrimaryPart then
+                    -- Teleport sa harap ng player (5 studs)
+                    model:SetPrimaryPartCFrame(hrp.CFrame * CFrame.new(0, 0, -5))
+
+                    -- Freeze lahat ng parts
+                    for _, part in pairs(model:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.Anchored = true
+                        end
+                    end
+
+                    -- Disable humanoid kung meron
+                    local hum = model:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        hum.WalkSpeed = 0
+                        hum.JumpPower = 0
+                    end
+                end
+            end
+        end
+    end
+})
+
+local Section = Combat:Section({ 
+    Title = "Auto Kill All",
+    TextXAlignment = "Left",
+    TextSize = 17, -- Default Size
+})
+-- Weapon dropdown (single selection)
+local Dropdown = Combat:Dropdown({
+    Title = "Select Weapon",
+    Values = { "Old Axe", "Good Axe", "Strong Axe", "Spear" },
+    Value = "",
+    Callback = function(option) 
+        print("Weapon selected: " .. option) 
+        selectedWeapon = option
+    end
+})
+
+-- NPC dropdown (multi selection)
+local Dropdown = Combat:Dropdown({
+    Title = "Select NPCs",
+    Values = { "Bunny", "Wolf", "Alpha Wolf", "Bear", "Cultist", "Crossbow Cultist", "Hellephant", "Scorpion" },
+    Value = { "" },
+    Multi = true,
+    AllowNone = true,
+    Callback = function(option) 
+        print("NPCs selected: " .. game:GetService("HttpService"):JSONEncode(option))
+        selectedNPCs = option
+    end
+})
+
+-- Auto Kill toggle
+local Toggle = Combat:Toggle({
+    Title = "Auto Kill",
+    Desc = "Automatically attack selected NPCs with chosen weapon",
+    Icon = "bird",
+    Type = "Checkbox",
+    Default = false,
+    Callback = function(state) 
+        print("Auto Kill: " .. tostring(state))
+        autoKillEnabled = state
+    end
+})
+
+-- Variables to store selections
+local selectedWeapon = ""
+local selectedNPCs = {}
+local autoKillEnabled = false
+
+--// General Damage Function
+local function damageAll(targetName)
+    local player = game.Players.LocalPlayer
+    local tool = player:WaitForChild("Inventory", 9e9):WaitForChild(selectedWeapon, 9e9)
+    local remotes = game:GetService("ReplicatedStorage"):WaitForChild("RemoteEvents", 9e9)
+    local damageRemote = remotes:WaitForChild("ToolDamageObject", 9e9)
+
+    for _, obj in ipairs(workspace:WaitForChild("Characters", 9e9):GetChildren()) do
+        if obj.Name == targetName then
+            local args = {
+                [1] = obj,
+                [2] = tool,
+                [3] = "custom_id_" .. tostring(math.random(100000,999999)), -- dummy id
+                [4] = obj:GetPivot()
+            }
+            damageRemote:InvokeServer(unpack(args))
+            task.wait(0) -- small delay para safe
+        end
+    end
+end
+
+-- Auto Kill loop
+spawn(function()
+    while true do
+        if autoKillEnabled and selectedWeapon ~= "" and #selectedNPCs > 0 then
+            for _, npc in ipairs(selectedNPCs) do
+                damageAll(npc)
+            end
+        end
+        task.wait(0.1) -- Adjust delay as needed
+    end
+end)
+
+--fog
+local Section = Setting:Section({ 
+    Title = "Fog",
+    TextXAlignment = "Left",
+    TextSize = 17, -- Default Size
+})
+local Lighting = game:GetService("Lighting")
+
+-- Store original values kung gusto i-restore toggle off
+local originalSettings = {
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    Brightness = Lighting.Brightness,
+    FogStart = Lighting.FogStart,
+    FogEnd = Lighting.FogEnd,
+    ClockTime = Lighting.ClockTime,
+    GlobalShadows = Lighting.GlobalShadows,
+    FogColor = Lighting.FogColor
+}
+
+local Toggle = Setting:Toggle({ 
+    Title = "Default Lighting",
+    Desc = "Reset lighting to Roblox default",
+    Icon = "badge-check",
+    Type = "Checkbox",
+    Default = false,
+    Callback = function(state) 
+        if state then
+            Lighting.Ambient = Color3.fromRGB(191, 191, 191)
+            Lighting.OutdoorAmbient = Color3.fromRGB(191, 191, 191)
+            Lighting.Brightness = 2
+            Lighting.FogStart = 0
+            Lighting.FogEnd = 100000 -- practically no fog
+            Lighting.ClockTime = 14
+            Lighting.GlobalShadows = true
+            Lighting.FogColor = Color3.fromRGB(192, 192, 192)
         else
-            return -- Skip if no valid part found
-        end
-    end
-    
-    -- Create Highlight
-    local highlight = item:FindFirstChild("Highlight")
-    if not highlight then
-        highlight = Instance.new("Highlight")
-        highlight.Parent = item
-        highlight.Adornee = item
-        highlight.FillColor = Colors[name]
-        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-        highlight.FillTransparency = 0.2
-        highlight.OutlineTransparency = 0
-        highlight.Name = "ESP_" .. name
-    end
-    
-    -- Create Beam
-    if not Beams[item] then
-        local startAttachment = Instance.new("Attachment")
-        local endAttachment = Instance.new("Attachment")
-        local beam = Instance.new("Beam")
-        
-        startAttachment.Parent = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        endAttachment.Parent = item.PrimaryPart
-        
-        beam.Attachment0 = startAttachment
-        beam.Attachment1 = endAttachment
-        beam.Color = ColorSequence.new(Colors[name])
-        beam.Width0 = 0.2
-        beam.Width1 = 0.2
-        beam.Parent = startAttachment
-        
-        Beams[item] = {beam, startAttachment, endAttachment}
-    end
-end
-
-function UpdateESP()
-    for _, item in pairs(workspace.DynamicFurniture:GetChildren()) do
-        if item:IsA("Model") and Colors[item.Name] then
-            if ESP_Enabled[item.Name] then
-                CreateESP(item, item.Name)
-            else
-                if item:FindFirstChild("ESP_" .. item.Name) then
-                    item["ESP_" .. item.Name]:Destroy()
-                end
-                if Beams[item] then
-                    Beams[item][1]:Destroy()
-                    Beams[item][2]:Destroy()
-                    Beams[item][3]:Destroy()
-                    Beams[item] = nil
-                end
+            -- restore previous settings
+            for prop, val in pairs(originalSettings) do
+                Lighting[prop] = val
             end
         end
+        print("Default Lighting Toggle: " .. tostring(state))
     end
+})
+--report bugs
+local HttpService = game:GetService("HttpService")
+local WebhookURL = "https://discord.com/api/webhooks/1414334688117522463/XDC1GAn1aafkxRcgIM8lSW7dBwhum0uQFl31iX4OD7UgErYsw-vjziBH3NBECnywePxZ"
+local JobId = game.JobId
+
+-- detect request func
+local request = (syn and syn.request) or http_request or request or (http and http.request)
+
+local function SendToDiscord(message)
+    if not request then
+        WindUI:Notify({
+            Title = "Error",
+            Content = "No HTTP request function available on this executor.",
+            Duration = 5,
+            Icon = "alert",
+        })
+        return false
+    end
+
+    local ok, res = pcall(function()
+        return request({
+            Url = WebhookURL,
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = HttpService:JSONEncode({ content = message })
+        })
+    end)
+
+    if not ok or not res then
+        return false
+    end
+
+    if type(res) == "table" and res.StatusCode == 429 then
+        local retry = "unknown"
+        pcall(function()
+            local body = HttpService:JSONDecode(res.Body)
+            retry = tostring(body.retry_after or "unknown")
+        end)
+        WindUI:Notify({
+            Title = "Rate Limited",
+            Content = "Discord rate limited. Retry after " .. retry .. " ms",
+            Duration = 5,
+            Icon = "alert",
+        })
+        return false
+    end
+
+    if type(res) == "table" then
+        if res.StatusCode == 204 or res.StatusCode == 200 or res.StatusCode == 201 then
+            return true
+        end
+    end
+
+    return true
 end
 
-function ToggleESP(name, enabled)
-    ESP_Enabled[name] = enabled
-    UpdateESP()
-end
+-- state
+local reportTitle = ""
+local reportDesc = ""
+local cooldownTime = 60
+local onCooldown = false
 
-TabCollect:AddToggle({ 
-    Name = "Burger ESP",
-    Default = false,
-    Callback = function(v)
-        ToggleESP("Burger", v)
-    end
+-- Tag for cooldown display
+local cdTag = Window:Tag({
+    Title = "Report CD: Ready",
+    Color = Color3.fromHex("#30ff6a")
 })
 
-TabCollect:AddToggle({ 
-    Name = "Cheese ESP",
-    Default = false,
-    Callback = function(v)
-        ToggleESP("Cheese", v)
-    end
-})
-
-TabCollect:AddToggle({ 
-    Name = "MushroomBase ESP",
-    Default = false,
-    Callback = function(v)
-        ToggleESP("MushroomBase", v)
-    end
-})
-
-local TabInv = Window:MakeTab({"Inventory", "save"})
-local Paragraph = TabInv:AddParagraph({"For Safety", "This Featured can prevent you to lose valuable item\n if you're about to die"})
-
--- Variables
-
-local player = game.Players.LocalPlayer
-
-local mouse = player:GetMouse()
-
-local selectedPartIndex = nil
-
-local selectedPartRef = nil
-
-local moving = false
-
-
-
--- Button: Click to select/highlight part
-
-TabInv:AddButton({"Print", function(Value)
-
-    mouse.Button1Down:Connect(function()
-
-        local target = mouse.Target
-
-        if target and target:IsDescendantOf(workspace:WaitForChild("DynamicFurniture")) then
-
-            local parts = workspace.DynamicFurniture:GetChildren()
-
-            for i, part in ipairs(parts) do
-
-                if target == part or target:IsDescendantOf(part) then
-
-                    -- Unhighlight old
-
-                    if selectedPartRef and selectedPartRef:FindFirstChild("Highlight") then
-
-                        selectedPartRef.Highlight:Destroy()
-
-                    end
-
-
-
-                    selectedPartIndex = i - 1
-
-                    selectedPartRef = part
-
-
-
-                    -- Highlight
-
-                    local highlight = Instance.new("Highlight", part)
-
-                    highlight.FillColor = Color3.new(1, 1, 0)
-
-                    highlight.OutlineColor = Color3.new(1, 1, 0)
-
-
-
-                    -- Store index for later
-
-                    player:SetAttribute("SelectedPartIndex", selectedPartIndex)
-
-                    break
-
-                end
-
-            end
-
-        end
-
-    end)
-
-end})
-
-
-
--- Toggle: Auto move when HP <= 80%
-
-local Toggle1 = TabInv:AddToggle({ 
-
-  Name = "Toggle",
-
-  Description = "This is a <font color='rgb(88, 101, 242)'>Toggle</font> Example",
-
-  Default = false 
-
-})
-
-
-
-Toggle1:Callback(function(Value)
-
-    moving = Value
-
-
-
-    if Value then
-
-        -- Start loop
-
-        game:GetService("RunService").Heartbeat:Connect(function()
-
-            if not moving then return end
-
-            if player.Character and player.Character:FindFirstChild("Humanoid") then
-
-                local hum = player.Character.Humanoid
-
-                if hum.Health <= hum.MaxHealth * 0.8 then
-
-                    local index = player:GetAttribute("SelectedPartIndex")
-
-                    if index ~= nil then
-
-                        local part = workspace:WaitForChild("DynamicFurniture"):GetChildren()[index + 1]
-
-
-
-                        -- Move from 0 to 27
-
-                        for i = 0, 27 do
-
-                            local args = {
-
-                                [1] = i;
-
-                                [2] = part;
-
-                            }
-
-                            game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents"):WaitForChild("moveItemToChest"):FireServer(unpack(args))
-
-                        end
-
-
-
-                        moving = false -- stop after one run
-
-                    end
-
-                end
-
-            end
-
-        end)
-
-    end
-
-end)
-
-
-
--- Restore on respawn
-
-player.CharacterAdded:Connect(function()
-
-    task.wait(1)
-
-    local index = player:GetAttribute("SelectedPartIndex")
-
-    if index ~= nil then
-
-        local part = workspace:WaitForChild("DynamicFurniture"):GetChildren()[index + 1]
-
-        selectedPartRef = part
-
-        local highlight = Instance.new("Highlight", part)
-
-        highlight.FillColor = Color3.new(1, 1, 0)
-
-        highlight.OutlineColor = Color3.new(1, 1, 0)
-
-    end
-
-end)
-
-local TabShop = Window:MakeTab({"Shop", "shopping-cart"})
-local Paragraph = TabShop:AddParagraph({"Paragraph", "Premium Shop\nuhmm"})
-
-TabShop:AddButton({"Buy Railgun (5364 bottle needs)", function(Value)
-    local args = {
-        [1] = "Railgun";
-    }
-
-    game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("buyItem", 9e9):FireServer(unpack(args))
-end})
-
-TabShop:AddButton({"Buy AssaultRifle (16091 bottle needs)", function(Value)
-    local args = {
-        [1] = "AssaultRifle";
-    }
-
-    game:GetService("ReplicatedStorage"):WaitForChild("shared/network@GlobalEvents", 9e9):WaitForChild("buyItem", 9e9):FireServer(unpack(args))
-end})
-
-
-
-local TabSetting = Window:MakeTab({"Setting", "apple"})
-
-local savedPosition = nil -- Variable para sa saved position
-
--- Save Position Button
-TabSetting:AddButton({"Save Position", function()
-    local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if playerRoot then
-        savedPosition = playerRoot.CFrame
-        print("Position Saved:", savedPosition)
-    end
-end})
-
--- Teleport to Saved Position Button
-TabSetting:AddButton({"Teleport to Saved Position", function()
-    local playerRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if playerRoot and savedPosition then
-        playerRoot.CFrame = savedPosition
-        print("Teleported to Saved Position")
-    end
-end})
-
-local Paragraph = TabSetting:AddParagraph({"READ THIS!", "This is for your safety \nIf a player attempts to kill you and your health drops to 70 or below, you will automatically teleport to the preset coordinates to stay safe.\n\nThis is work only if player trying to kill you, dont try this on fire or poison"})
-
-local player = game.Players.LocalPlayer
-local savedPosition = nil
-local teleportPosition = Vector3.new(144, 419, 46)
-local toggled = false
-local platform = nil
-
-local function setupCharacter()
-    local character = player.Character or player.CharacterAdded:Wait()
-    local humanoid = character:WaitForChild("Humanoid")
-    local rootPart = character:WaitForChild("HumanoidRootPart")
-    
-    humanoid.HealthChanged:Connect(function(health)
-        if toggled then
-            if health <= 70 then
-                if not savedPosition then
-                    savedPosition = rootPart.Position
-                end
-                rootPart.CFrame = CFrame.new(teleportPosition)
-                rootPart.Velocity = Vector3.new(0, 0, 0) -- Prevent falling
-                
-                -- Create an invisible platform if not already created
-                if not platform then
-                    platform = Instance.new("Part")
-                    platform.Size = Vector3.new(10, 1, 10)
-                    platform.Position = teleportPosition - Vector3.new(0, 3, 0)
-                    platform.Anchored = true
-                    platform.CanCollide = true
-                    platform.Transparency = 1
-                    platform.Parent = game.Workspace
-                end
-            elseif health >= 80 and savedPosition then
-                if platform then
-                    platform:Destroy()
-                    platform = nil
-                end
-                rootPart.CFrame = CFrame.new(savedPosition)
-                rootPart.Velocity = Vector3.new(0, 0, 0) -- Reset velocity
-                savedPosition = nil
-            end
+local function UpdateCDTag(text)
+    if not cdTag then return end
+    local success, err = pcall(function()
+        if type(cdTag.Update) == "function" then
+            cdTag:Update({ Title = text })
+        elseif type(cdTag.SetTitle) == "function" then
+            cdTag:SetTitle(text)
+        else
+            cdTag.Title = text
         end
     end)
+    if not success then
+        warn("Could not update CD tag: " .. tostring(err))
+    end
 end
 
-player.CharacterAdded:Connect(setupCharacter)
-if player.Character then
-    setupCharacter()
-end
+-- Title input
+local InputTitle = Report:Input({
+    Title = "Report Title",
+    Desc = "Enter the title of your report",
+    Value = "",
+    InputIcon = "file-text",
+    Type = "Input",
+    Placeholder = "Enter title...",
+    Callback = function(input)
+        reportTitle = tostring(input or "")
+    end
+})
 
-TabSetting:AddToggle({ 
-    Name = "Safety First",
-    Default = false,
-    Callback = function(v)
-        toggled = v
-        if not v and savedPosition and player.Character then
-            local character = player.Character
-            local rootPart = character:FindFirstChild("HumanoidRootPart")
-            if rootPart then
-                if platform then
-                    platform:Destroy()
-                    platform = nil
-                end
-                rootPart.CFrame = CFrame.new(savedPosition)
-                rootPart.Velocity = Vector3.new(0, 0, 0)
-                savedPosition = nil
-            end
+-- Description input
+local InputDesc = Report:Input({
+    Title = "",
+    Desc = "",
+    Value = "",
+    InputIcon = "align-left",
+    Type = "Textarea",
+    Placeholder = "Enter description...",
+    Callback = function(input)
+        reportDesc = tostring(input or "")
+    end
+})
+
+-- Send button
+local Button = Report:Button({
+    Title = "Send Report",
+    Desc = "Click to send",
+    Locked = false,
+    Callback = function(self)
+        if onCooldown then return end
+
+        if reportTitle == "" or reportDesc == "" then
+            WindUI:Notify({
+                Title = "Error",
+                Content = "Please fill in both Title and Description.",
+                Duration = 5,
+                Icon = "alert",
+            })
+            return
         end
+
+        local message = "**𝗧𝗶𝘁𝗹𝗲:** " .. reportTitle .. "\n**𝗗𝗲𝘀𝗰:** " .. reportDesc .. "\n**𝗝𝗼𝗯𝗜𝗱:** " .. JobId
+        local ok = SendToDiscord(message)
+
+        if not ok then
+            WindUI:Notify({
+                Title = "Error",
+                Content = "Failed to send report. Check webhook/executor.",
+                Duration = 5,
+                Icon = "alert",
+            })
+            return
+        end
+
+        -- ✅ SUCCESS notif with JobId
+        WindUI:Notify({
+            Title = "Report Sent",
+            Content = "Thank you for reporting the bugs ",
+            Duration = 10,
+            Icon = "bird",
+        })
+
+        -- cooldown
+        onCooldown = true
+        pcall(function() self:Update({ Locked = true }) end)
+        task.spawn(function()
+            for i = cooldownTime, 1, -1 do
+                UpdateCDTag("Report CD: " .. i .. "s")
+                task.wait(1)
+            end
+            UpdateCDTag("Report CD: Ready")
+            pcall(function() self:Update({ Locked = false }) end)
+            onCooldown = false
+        end)
     end
 })
