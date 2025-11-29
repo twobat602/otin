@@ -1,38 +1,60 @@
--- Load RedzLib
-local redzlib = loadstring(game:HttpGet("https://raw.githubusercontent.com/tbao143/Library-ui/refs/heads/main/Redzhubui"))()
+local args = {
+	workspace:WaitForChild("Proximity"):WaitForChild("Forge")
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ProximityService"):WaitForChild("RF"):WaitForChild("Forge"):InvokeServer(unpack(args))
 
--- Create main window
-local Window = redzlib:MakeWindow({
-    Title = "redz Hub : Blox Fruits",
-    SubTitle = "by redz9999",
-    SaveFolder = "testando | redz lib v5.lua"
-})
+local args = {
+	"Melt",
+	{
+		FastForge = false,
+		ItemType = "Weapon",
+		Ores = {
+			Stone = 2,
+			Iron = 4,
+			Copper = 4,
+			["Sand Stone"] = 2
+		}
+	}
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ForgeService"):WaitForChild("RF"):WaitForChild("ChangeSequence"):InvokeServer(unpack(args))
 
--- Add minimize button
-Window:AddMinimizeButton({
-    Button = { Image = "rbxassetid://71014873973869", BackgroundTransparency = 0 },
-    Corner = { CornerRadius = UDim.new(35, 1) },
-})
+local args = {
+	"Pour",
+	{
+		ClientTime = 1764458128.1981921
+	}
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ForgeService"):WaitForChild("RF"):WaitForChild("ChangeSequence"):InvokeServer(unpack(args))
 
--- Create tab
-local Tab1 = Window:MakeTab({"Um", "cherry"})
+local args = {
+	"Hammer",
+	{
+		ClientTime = 1764458144.089823
+	}
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ForgeService"):WaitForChild("RF"):WaitForChild("ChangeSequence"):InvokeServer(unpack(args))
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local GlobalEvent = ReplicatedStorage:WaitForChild("shared", 9e9):WaitForChild("network@GlobalEvents", 9e9):WaitForChild("collectBottleCollector", 9e9)
-local DynamicFurniture = workspace:WaitForChild("DynamicFurniture", 9e9):GetChildren()
+local args = {
+	"Water",
+	{
+		ClientTime = 1764458150.60336
+	}
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ForgeService"):WaitForChild("RF"):WaitForChild("ChangeSequence"):InvokeServer(unpack(args))
 
-Tab1:AddButton({
-    "Collect All (1 to 1000)",
-    function()
-        for i = 1, math.min(1000, #DynamicFurniture) do
-            local child = DynamicFurniture[i]
-            if child then
-                local args = {
-                    [1] = child
-                }
-                GlobalEvent:FireServer(unpack(args))
-                task.wait(0.01) -- maliit na delay para di mag-lag
-            end
-        end
-    end
-})
+local args = {
+	"Showcase",
+	{}
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ForgeService"):WaitForChild("RF"):WaitForChild("ChangeSequence"):InvokeServer(unpack(args))
+
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("StatusService"):WaitForChild("RF"):WaitForChild("GetPlayerEquipmentInfo"):InvokeServer()
+
+
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ForgeService"):WaitForChild("RF"):WaitForChild("EndForge"):InvokeServer()
+
+local args = {
+	"Pickaxe"
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ToolService"):WaitForChild("RF"):WaitForChild("ToolActivated"):InvokeServer(unpack(args))
+
